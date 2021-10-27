@@ -1,12 +1,12 @@
-defmodule Membrane.Template.Mixfile do
+defmodule Membrane.FLV.Mixfile do
   use Mix.Project
 
   @version "0.1.0"
-  @github_url "https://github.com/membraneframework/membrane_template_plugin"
+  @github_url "https://github.com/membraneframework/membrane_flv_plugin"
 
   def project do
     [
-      app: :membrane_template_plugin,
+      app: :membrane_flv_plugin,
       version: @version,
       elixir: "~> 1.12",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -14,7 +14,7 @@ defmodule Membrane.Template.Mixfile do
       deps: deps(),
 
       # hex
-      description: "Template Plugin for Membrane Multimedia Framework",
+      description: "FLV Container implementation for Membrane Framework",
       package: package(),
 
       # docs

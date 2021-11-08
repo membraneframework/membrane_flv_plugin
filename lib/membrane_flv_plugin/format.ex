@@ -9,6 +9,12 @@ defmodule Membrane.FLV do
                 video: nil
               ]
 
+  @type t() :: %__MODULE__{
+          mode: mode_t(),
+          audio: nil | audio_format_t(),
+          video: nil | video_codec_t()
+        }
+
   @typedoc """
   Description of mode in which the FLV container is streamed:
     - `:packets` means that the FLV header is transmitted in the very first buffer, then only the packets from inside the container are sent.
@@ -34,7 +40,7 @@ defmodule Membrane.FLV do
                   15 => :device_specific
                 })
 
-  @type sound_format_t() ::
+  @type audio_format_t() ::
           :pcm
           | :adpcm
           | :MP3
@@ -61,16 +67,10 @@ defmodule Membrane.FLV do
   @type video_codec_t() ::
           :sorenson_h263 | :screen_video | :vp6 | :vp6_with_alpha | :screen_video_2 | :H264
 
-  @type t() :: %__MODULE__{
-          mode: mode_t(),
-          audio: nil | sound_format_t(),
-          video: nil | video_codec_t()
-        }
-
-  @spec index_to_sound_format(non_neg_integer()) :: sound_format_t()
+  @spec index_to_sound_format(non_neg_integer()) :: audio_format_t()
   def index_to_sound_format(index), do: BiMap.fetch!(@sound_format, index)
 
-  @spec sound_format_to_index(sound_format_t()) :: non_neg_integer()
+  @spec sound_format_to_index(audio_format_t()) :: non_neg_integer()
   def sound_format_to_index(format), do: BiMap.fetch_key!(@sound_format, format)
 
   @spec index_to_video_codec(non_neg_integer()) :: video_codec_t()

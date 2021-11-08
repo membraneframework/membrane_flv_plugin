@@ -36,10 +36,15 @@ defmodule Membrane.FLV.Mixfile do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.7.0"},
+      {:membrane_core, "~> 0.7"},
+      {:membrane_aac_format,
+       github: "membraneframework/membrane_aac_format", branch: "remote-aac-caps"},
+      {:membrane_file_plugin, "~> 0.6", only: :test},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
       {:dialyxir, "~> 1.1", only: :dev, runtime: false},
-      {:credo, "~> 1.5", only: :dev, runtime: false}
+      {:credo, "~> 1.5", only: :dev, runtime: false},
+      {:bimap, "~> 1.2"},
+      {:bunch, "~> 1.3"}
     ]
   end
 
@@ -59,7 +64,7 @@ defmodule Membrane.FLV.Mixfile do
       main: "readme",
       extras: ["README.md", "LICENSE"],
       source_ref: "v#{@version}",
-      nest_modules_by_prefix: [Membrane.Template]
+      nest_modules_by_prefix: [Membrane.FLV]
     ]
   end
 end

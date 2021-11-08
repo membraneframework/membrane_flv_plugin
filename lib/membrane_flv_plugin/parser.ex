@@ -1,108 +1,179 @@
 defmodule Membrane.FLV.Parser do
   @moduledoc false
 
-  @spec parse(binary()) :: {:ok, {:header, map()} | {:packets, [map()]}, rest :: binary()}
-  def parse(data) do
-    case parse_header(data) do
-      {:ok, _, _} = header -> header
-      _else -> parse_packets(data)
+  alias Membrane.FLV
+
+  defmodule Header do
+    @moduledoc false
+
+    @enforce_keys [:audio_present?, :video_present?]
+    defstruct @enforce_keys
+
+    @type t() :: %__MODULE__{
+            audio_present?: boolean(),
+            video_present?: boolean()
+          }
+  end
+
+  defmodule Packet do
+    @moduledoc false
+
+    @enforce_keys [
+      :timestamp,
+      :stream_id,
+      :type,
+      :payload,
+      :codec
+    ]
+    defstruct @enforce_keys ++ [:codec_params]
+
+    @type t() :: %__MODULE__{
+            timestamp: timestamp_t(),
+            stream_id: stream_id_t(),
+            type: type_t(),
+            payload: binary(),
+            codec: FLV.audio_codec_t() | FLV.video_codec_t(),
+            codec_params: nil | audio_params_t()
+          }
+
+    @type type_t() :: :audio | :video | :audio_config | :video_config
+    @type stream_id_t() :: non_neg_integer()
+    @type timestamp_t() :: non_neg_integer()
+    @type audio_params_t() :: {sound_rate :: non_neg_integer(), sound_format :: :mono | :stereo}
+  end
+
+  @spec parse_header(binary()) :: {:ok, Header.t(), binary()} | {:error, reason :: any()}
+  def parse_header(
+        <<"FLV", 0x01::8, 0::5, audio_present?::1, 0::1, video_present?::1, data_offset::32,
+          _rest::binary>> = data
+      ) do
+    case data do
+      <<_header::binary-size(data_offset), rest::binary>> ->
+        %Header{
+          audio_present?: parse_flag(audio_present?),
+          video_present?: parse_flag(video_present?)
+        }
+        |> then(&{:ok, &1, rest})
+
+      _else ->
+        {:error, :not_enough_data}
     end
   end
 
-  @spec parse_header(binary()) ::
-          {:ok, {:header, header :: map()}, rest :: binary()} | {:error, any()}
-  def parse_header(
-        <<"FLV", 0x01::8, 0::5, audio_present?::1, 0::1, video_present?::1, data_offset::32,
-          _rest::binary>> = frame
-      ) do
-    global_header = %{
-      audio_present?: flag_to_boolean(audio_present?),
-      video_present?: flag_to_boolean(video_present?)
-    }
+  def parse_header(data) when byte_size(data) < 9, do: {:error, :not_enough_data}
+  def parse_header(_incorrect_data), do: {:error, :not_a_header}
 
-    <<_data::binary-size(data_offset), rest::binary>> = frame
+  @spec parse_packets(binary()) ::
+          {:ok, packets :: [Packet.t()], rest :: binary()} | {:error, :not_enough_data}
+  def parse_packets(data) when byte_size(data) < 15, do: {:error, :not_enough_data}
 
-    {:ok, {:header, global_header}, rest}
-  end
+  def parse_packets(<<_head::40, data_size::24, _rest::binary>> = data)
+      when byte_size(data) < data_size + 15,
+      do: {:error, :not_enough_data}
 
-  def parse_header(_else), do: {:error, :invalid_header}
-
-  defp flag_to_boolean(1), do: true
-  defp flag_to_boolean(0), do: false
-
-  @spec parse_packets(any) :: {:ok, {:packets, [map()]}, any}
   def parse_packets(
-        <<_previous_tag_size::32, _reserved::2, 0::1, type::5, data_size::24, timestamp::24,
-          _timestamp_extended::8, stream_id::24, payload::binary-size(data_size), rest::binary>>
-      ) do
-    use Bitwise
-    {:ok, {:packets, packets}, leftover} = parse_packets(rest)
+        <<_head::34, 0::1, 18::5, data_size::24, _ts::24, _tsx::8, _sid::24,
+          _payload::binary-size(data_size), rest::binary>>
+      ),
+      do: parse_packets(rest)
 
-    packet = %{
-      type: resolve_type(type),
-      timestamp: timestamp,
+  def parse_packets(<<
+        _previous_tag_size::32,
+        _reserved::2,
+        0::1,
+        type::5,
+        data_size::24,
+        timestamp::24,
+        timestamp_extended::8,
+        stream_id::24,
+        payload::binary-size(data_size),
+        rest::binary
+      >>) do
+    type = resolve_type(type)
+    {type, codec, codec_params, payload} = parse_payload(type, payload)
+
+    packet = %Packet{
+      timestamp: parse_timestamp(timestamp, timestamp_extended),
       stream_id: stream_id,
-      payload: parse_packet_payload(type, payload)
+      type: type,
+      payload: payload,
+      codec: codec,
+      codec_params: codec_params
     }
 
-    {:ok, {:packets, [packet | packets]}, leftover}
+    case parse_packets(rest) do
+      {:ok, packets, rest} ->
+        {:ok, [packet | packets], rest}
+
+      {:error, :not_enough_data} ->
+        {:ok, [packet], rest}
+    end
   end
 
-  def parse_packets(leftover) do
-    {:ok, {:packets, []}, leftover}
-  end
+  def parse_packets(_too_little_data), do: {:error, :not_enough_data}
 
-  defp parse_packet_payload(
-         8,
-         <<10::4, 3::2, _sound_size::1, 1::1, acc_packet_type::8, data::binary>>
+  # AAC
+  defp parse_payload(
+         :audio,
+         <<10::4, 3::2, _sound_size::1, 1::1, packet_type::8, payload::binary>>
        ) do
-    packet_type =
-      case acc_packet_type do
-        0 -> :aac_audio_specific_config
-        1 -> :aac_frame
-        2 -> :aac_end_of_sequence
+    type = if packet_type == 1, do: :audio, else: :audio_config
+    {type, :AAC, nil, payload}
+  end
+
+  # everything else
+  defp parse_payload(:audio, <<
+         sound_format::4,
+         sound_rate::2,
+         _sound_size::1,
+         sound_type::1,
+         payload::binary
+       >>) do
+    codec = FLV.index_to_sound_format(sound_format)
+
+    sound_rate =
+      case sound_rate do
+        0 -> 5_500
+        1 -> 11_000
+        2 -> 22_050
+        3 -> 44_100
       end
 
-    %{
-      codec: :AAC,
-      packet_type: packet_type,
-      payload: data
-    }
-  end
-
-  defp parse_packet_payload(8, _else), do: %{packet_type: :audio, payload: :unknown_variation}
-
-  defp parse_packet_payload(
-         9,
-         <<frame_type::4, 7::4, avc_packet_type::8, composition_time::24, data::binary>>
-       ) do
-    packet_type =
-      case avc_packet_type do
-        0 -> :avc_decoder_configuration_record
-        1 -> :avc_frame
-        2 -> :avc_end_of_sequence
+    sound_type =
+      case sound_type do
+        0 -> :mono
+        1 -> :stereo
       end
 
-    %{
-      codec: :AVC,
-      packet_type: packet_type,
-      payload: if(packet_type == :avc_frame, do: to_annex_b(data), else: data),
-      composition_time: composition_time,
-      frame_type: frame_type
-    }
+    {:audio, codec, {sound_rate, sound_type}, payload}
   end
 
-  defp parse_packet_payload(9, _payload), do: %{packet_type: :video, payload: :unknown_variation}
+  defp parse_payload(:video, <<
+         _frame_type::4,
+         # AVC H264
+         7::4,
+         packet_type::8,
+         _composition_time::24,
+         payload::binary
+       >>) do
+    type = if packet_type == 0, do: :video_config, else: :video
+    {type, :H264, nil, payload}
+  end
 
-  defp parse_packet_payload(18, _payload),
-    do: %{packet_type: :script_data, payload: :unknown_variation}
+  defp parse_payload(:video, <<_frame_type::4, codec::4, _rest::binary>>) do
+    vcodec = FLV.index_to_video_codec(codec) |> inspect()
+    raise("Video codec #{vcodec} is not yet supported")
+  end
+
+  defp parse_flag(1), do: true
+  defp parse_flag(0), do: false
 
   defp resolve_type(8), do: :audio
   defp resolve_type(9), do: :video
   defp resolve_type(18), do: :script_data
 
-  defp to_annex_b(<<length::32, data::binary-size(length), rest::binary>>),
-    do: <<0, 0, 1>> <> data <> to_annex_b(rest)
-
-  defp to_annex_b(_otherwise), do: <<>>
+  defp parse_timestamp(timestamp, timestamp_extended) do
+    use Bitwise
+    (timestamp_extended <<< 24) + timestamp
+  end
 end

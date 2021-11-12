@@ -93,30 +93,28 @@ defmodule Membrane.FLV.Demuxer do
     {{:ok, actions}, %{state | pads_buffer: %{}}}
   end
 
-  defp get_actions(frames, state) do
-    Enum.reduce(frames, {[], state}, &do_get_action/2)
-  end
+  defp get_actions(frames, original_state) do
+    Enum.reduce(frames, {[], original_state}, fn %{type: type} = packet, {actions, state} ->
+      pad = pad(packet)
 
-  defp do_get_action(%{type: type} = packet, {actions, state}) do
-    pad = pad(packet)
+      cond do
+        type == :audio_config and packet.codec == :AAC ->
+          Membrane.Logger.debug("Audio configuration received")
+          {:caps, {pad, %RemoteStream.AAC{audio_specific_config: packet.payload}}}
 
-    cond do
-      type == :audio_config and packet.codec == :AAC ->
-        Membrane.Logger.debug("Audio configuration received")
-        {:caps, {pad, %RemoteStream.AAC{audio_specific_config: packet.payload}}}
+        type in [:audio_config, :video_config] ->
+          [
+            caps: {pad, %RemoteStream{content_format: packet.codec}},
+            buffer: {pad, %Buffer{payload: get_payload(packet, state)}}
+          ]
 
-      type in [:audio_config, :video_config] ->
-        [
-          caps: {pad, %RemoteStream{content_format: packet.codec}},
-          buffer: {pad, %Buffer{payload: get_payload(packet, state)}}
-        ]
-
-      true ->
-        buffer = %Buffer{payload: get_payload(packet, state)}
-        {:buffer, {pad, buffer}}
-    end
-    |> do_out_action(packet, state)
-    |> then(fn {out_actions, state} -> {actions ++ out_actions, state} end)
+        true ->
+          buffer = %Buffer{payload: get_payload(packet, state)}
+          {:buffer, {pad, buffer}}
+      end
+      |> do_out_action(packet, state)
+      |> then(fn {out_actions, state} -> {actions ++ out_actions, state} end)
+    end)
   end
 
   defp do_out_action(actions, packet, state) when is_list(actions) do
@@ -144,7 +142,8 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   defp get_payload(%Parser.Packet{type: :video_config, codec: :H264} = packet, _state) do
-    {:ok, %{pps: [pps], sps: [sps]}} = Membrane.AVC.Configuration.parse(packet.payload)
+    # TODO: Would be great if this was handled by H264 decoder, just like conversion from AVC1 to Annex B
+    {:ok, %{pps: [pps], sps: [sps]}} = Membrane.H264.DecoderConfiguration.parse(packet.payload)
     <<0, 0, 1>> <> sps <> <<0, 0, 1>> <> pps
   end
 

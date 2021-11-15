@@ -141,13 +141,13 @@ defmodule Membrane.FLV.Demuxer do
     end
   end
 
-  defp get_payload(%Parser.Packet{type: :video_config, codec: :H264} = packet, _state) do
+  defp get_payload(%FLV.Packet{type: :video_config, codec: :H264} = packet, _state) do
     # TODO: Would be great if this was handled by H264 decoder, just like conversion from AVC1 to Annex B
     {:ok, %{pps: [pps], sps: [sps]}} = Membrane.H264.DecoderConfiguration.parse(packet.payload)
     <<0, 0, 1>> <> sps <> <<0, 0, 1>> <> pps
   end
 
-  defp get_payload(%Parser.Packet{type: :video, codec: :H264} = packet, _state) do
+  defp get_payload(%FLV.Packet{type: :video, codec: :H264} = packet, _state) do
     Membrane.AVC.Utils.to_annex_b(packet.payload)
   end
 
@@ -157,9 +157,9 @@ defmodule Membrane.FLV.Demuxer do
     [notify: {:new_stream, pad(packet), packet.codec}]
   end
 
-  defp pad(%Parser.Packet{type: type, stream_id: stream_id}) when type in [:audio_config, :audio],
+  defp pad(%FLV.Packet{type: type, stream_id: stream_id}) when type in [:audio_config, :audio],
     do: Pad.ref(:audio, stream_id)
 
-  defp pad(%Parser.Packet{type: type, stream_id: stream_id}) when type in [:video_config, :video],
+  defp pad(%FLV.Packet{type: type, stream_id: stream_id}) when type in [:video_config, :video],
     do: Pad.ref(:video, stream_id)
 end

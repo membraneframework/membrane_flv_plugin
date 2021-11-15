@@ -56,4 +56,43 @@ defmodule Membrane.FLV do
 
   @spec video_codec_to_index(video_codec_t()) :: non_neg_integer()
   def video_codec_to_index(codec), do: BiMap.fetch_key!(@video_codec, codec)
+
+  defmodule Header do
+    @moduledoc false
+
+    @enforce_keys [:audio_present?, :video_present?]
+    defstruct @enforce_keys
+
+    @type t() :: %__MODULE__{
+            audio_present?: boolean(),
+            video_present?: boolean()
+          }
+  end
+
+  defmodule Packet do
+    @moduledoc false
+
+    @enforce_keys [
+      :timestamp,
+      :stream_id,
+      :type,
+      :payload,
+      :codec
+    ]
+    defstruct @enforce_keys ++ [:codec_params]
+
+    @type t() :: %__MODULE__{
+            timestamp: timestamp_t(),
+            stream_id: stream_id_t(),
+            type: type_t(),
+            payload: binary(),
+            codec: Membrane.FLV.audio_codec_t() | Membrane.FLV.video_codec_t(),
+            codec_params: nil | audio_params_t()
+          }
+
+    @type type_t() :: :audio | :video | :audio_config | :video_config
+    @type stream_id_t() :: non_neg_integer()
+    @type timestamp_t() :: non_neg_integer()
+    @type audio_params_t() :: {sound_rate :: non_neg_integer(), sound_format :: :mono | :stereo}
+  end
 end

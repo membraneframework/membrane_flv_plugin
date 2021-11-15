@@ -9,11 +9,13 @@ defmodule Membrane.FLV.Demuxer.Test do
     %{pid: pid}
   end
 
-  test "streams are detected and", %{pid: pid} do
+  test "streams are detected", %{pid: pid} do
     assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :H264})
     assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :AAC})
-    assert_sink_caps(pid, :video_sink, %Membrane.RemoteStream{content_format: :H264})
-    assert_sink_caps(pid, :audio_sink, %Membrane.RemoteStream.AAC{})
+    assert_sink_caps(pid, :video_sink, %Membrane.RemoteStream{content_format: :H264}, 3000)
+    assert_sink_caps(pid, :audio_sink, %Membrane.RemoteStream.AAC{}, 3000)
+    assert_sink_buffer(pid, :video_sink, %Membrane.Buffer{})
+    assert_sink_buffer(pid, :audio_sink, %Membrane.Buffer{})
   end
 
   defmodule Support.Pipeline do

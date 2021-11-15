@@ -1,27 +1,5 @@
 defmodule Membrane.FLV do
-  @moduledoc """
-  Capabilities for Flash Video (FLV) container
-  """
-  @enforce_keys [:mode]
-  defstruct @enforce_keys ++
-              [
-                audio: nil,
-                video: nil
-              ]
-
-  @type t() :: %__MODULE__{
-          mode: mode_t(),
-          audio: nil | audio_format_t(),
-          video: nil | video_codec_t()
-        }
-
-  @typedoc """
-  Description of mode in which the FLV container is streamed:
-    - `:packets` means that the FLV header is transmitted in the very first buffer, then only the packets from inside the container are sent.
-      This mode will be use when eg. reading an FLV file
-    - `:frames` means that each buffer contains a full FLV container. This is highly unlikely to ever be seen.
-  """
-  @type mode_t() :: :packets | :frames
+  @moduledoc false
 
   @sound_format BiMap.new(%{
                   0 => :pcm,

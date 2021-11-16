@@ -36,9 +36,9 @@ defmodule Membrane.FLV.Muxer do
   def handle_init(%__MODULE__{} = opts) do
     {:ok,
      Map.merge(Map.from_struct(opts), %{
-       params_sent: MapSet.new(),
        last_item_size: 0,
-       timestamps: %{}
+       timestamps: %{},
+       header_sent: false
      })}
   end
 
@@ -60,15 +60,6 @@ defmodule Membrane.FLV.Muxer do
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, state) do
-    %Header{
-      audio_present?: state.audio_present?,
-      video_present?: state.video_present?
-    }
-    |> handle_segment(state)
-  end
-
-  @impl true
   def handle_process(Pad.ref(type, stream_id) = pad, buffer, ctx, state) do
     if ctx.pads[pad].caps == nil,
       do: raise("Caps must be sent before sending a packet you blithering idiot")
@@ -83,11 +74,11 @@ defmodule Membrane.FLV.Muxer do
       codec: codec(type),
       timestamp: timestamp
     }
-    |> handle_segment(state)
+    |> handle_segment(ctx, state)
   end
 
   @impl true
-  def handle_caps(Pad.ref(:audio, stream_id), %AAC{} = caps, _ctx, state) do
+  def handle_caps(Pad.ref(:audio, stream_id), %AAC{} = caps, ctx, state) do
     %Packet{
       type: :audio_config,
       stream_id: stream_id,
@@ -95,14 +86,14 @@ defmodule Membrane.FLV.Muxer do
       codec: :AAC,
       timestamp: 0
     }
-    |> handle_segment([], state)
+    |> handle_segment([], ctx, state)
   end
 
   @impl true
   def handle_caps(
         Pad.ref(:video, stream_id),
         %Membrane.MP4.Payload{content: %Membrane.MP4.Payload.AVC1{avcc: config}} = _caps,
-        _ctx,
+        ctx,
         state
       ) do
     %Packet{
@@ -112,11 +103,12 @@ defmodule Membrane.FLV.Muxer do
       codec: :H264,
       timestamp: 0
     }
-    |> handle_segment(state)
+    |> handle_segment(ctx, state)
   end
 
   @impl true
-  def handle_caps(_pad, _caps, _ctx, _state), do: raise("No chyba Cie pojebało")
+  def handle_caps(Pad.ref(type, _id) = _pad, caps, _ctx, _state),
+    do: raise("Caps `#{inspect(caps)}` are not supported for stream type #{inspect(type)}")
 
   defp codec(:audio), do: :AAC
   defp codec(:video), do: :H264
@@ -127,10 +119,39 @@ defmodule Membrane.FLV.Muxer do
       |> Membrane.Time.as_milliseconds()
       |> Ratio.floor()
 
-  defp handle_segment(segment, additional_actions \\ [redemand: :output], state) do
-    {packet, last_item_size} = Serializer.serialize(segment, state.last_item_size)
-    state = Map.put(state, :last_item_size, last_item_size)
-    actions = Enum.concat([buffer: {:output, %Buffer{payload: packet}}], additional_actions)
+  defp handle_segment(segment, additional_actions \\ [redemand: :output], ctx, state) do
+    {header_action, state} = maybe_send_header(ctx, state)
+    {packet_action, state} = do_handle_segment(segment, state)
+
+    actions =
+      Enum.concat([
+        header_action,
+        packet_action,
+        additional_actions
+      ])
+
     {{:ok, actions}, state}
   end
+
+  defp maybe_send_header(_ctx, %{header_sent: true} = state), do: {[], state}
+
+  defp maybe_send_header(ctx, state) do
+    {actions, state} =
+      %Header{
+        audio_present?: state.audio_present? or has_stream?(:audio, ctx),
+        video_present?: state.video_present? or has_stream?(:video, ctx)
+      }
+      |> do_handle_segment(state)
+
+    state = Map.put(state, :header_sent, true)
+    {actions, state}
+  end
+
+  defp do_handle_segment(segment, state) do
+    {packet, last_item_size} = Serializer.serialize(segment, state.last_item_size)
+    state = Map.put(state, :last_item_size, last_item_size)
+    {[buffer: {:output, %Buffer{payload: packet}}], state}
+  end
+
+  defp has_stream?(type, ctx), do: ctx.pads |> Enum.any?(&match?({Pad.ref(^type, _), _value}, &1))
 end

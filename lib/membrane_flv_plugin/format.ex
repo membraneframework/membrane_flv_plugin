@@ -92,6 +92,9 @@ defmodule Membrane.FLV do
             codec_params: nil | audio_params_t()
           }
 
+    defguard is_audio(packet) when packet.type in [:audio, :audio_config]
+    defguard is_video(packet) when packet.type in [:video, :video_config]
+
     @type type_t() :: :audio | :video | :audio_config | :video_config
     @type stream_id_t() :: non_neg_integer()
     @type timestamp_t() :: non_neg_integer()

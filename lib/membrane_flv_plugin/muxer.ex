@@ -34,18 +34,29 @@ defmodule Membrane.FLV.Muxer do
 
   @impl true
   def handle_init(%__MODULE__{} = opts) do
-    {:ok, Map.merge(opts, %{params_sent: MapSet.new(), last_item_size: 0})}
+    {:ok,
+     Map.merge(Map.from_struct(opts), %{
+       params_sent: MapSet.new(),
+       last_item_size: 0,
+       timestamps: %{}
+     })}
   end
 
   @impl true
-  def handle_demand(:output, size, :buffers, ctx, state) do
-    actions =
-      ctx.pads
-      |> Enum.filter(&match?({_, %Membrane.Pad.Data{direction: :input}}, &1))
-      |> Enum.map(&Bunch.key/1)
-      |> Enum.flat_map(&[demand: {&1, size}])
+  def handle_pad_added(pad, ctx, state) do
+    state = put_in(state, [:timestamps, pad], 0)
 
-    {{:ok, actions}, state}
+    if ctx.playback_state == :playing do
+      {{:ok, redemand: :output}, state}
+    else
+      {:ok, state}
+    end
+  end
+
+  @impl true
+  def handle_demand(:output, size, :buffers, _ctx, state) do
+    {pad, _pts} = Enum.min_by(state.timestamps, &Bunch.value/1)
+    {{:ok, demand: {pad, size}}, state}
   end
 
   @impl true
@@ -58,16 +69,19 @@ defmodule Membrane.FLV.Muxer do
   end
 
   @impl true
-  def handle_process(Pad.ref(type, steam_id) = pad, buffer, ctx, state) do
+  def handle_process(Pad.ref(type, stream_id) = pad, buffer, ctx, state) do
     if ctx.pads[pad].caps == nil,
       do: raise("Caps must be sent before sending a packet you blithering idiot")
 
+    timestamp = get_timestamp(buffer)
+    state = put_in(state, [:timestamps, pad], timestamp)
+
     %Packet{
       type: type,
-      stream_id: steam_id,
+      stream_id: stream_id,
       payload: buffer.payload,
       codec: codec(type),
-      timestamp: get_timestamp(type, buffer)
+      timestamp: timestamp
     }
     |> handle_segment(state)
   end
@@ -81,7 +95,7 @@ defmodule Membrane.FLV.Muxer do
       codec: :AAC,
       timestamp: 0
     }
-    |> handle_segment(state)
+    |> handle_segment([], state)
   end
 
   @impl true
@@ -107,15 +121,16 @@ defmodule Membrane.FLV.Muxer do
   defp codec(:audio), do: :AAC
   defp codec(:video), do: :H264
 
-  defp get_timestamp(:audio, buffer),
-    do: Ratio.floor(buffer.metadata.timestamp) |> Membrane.Time.as_milliseconds() |> Ratio.floor()
+  defp get_timestamp(buffer),
+    do:
+      Ratio.floor(buffer.metadata.timestamp)
+      |> Membrane.Time.as_milliseconds()
+      |> Ratio.floor()
 
-  defp get_timestamp(:video, buffer),
-    do: Ratio.floor(buffer.metadata.timestamp) |> Membrane.Time.as_milliseconds() |> Ratio.floor()
-
-  defp handle_segment(segment, state) do
+  defp handle_segment(segment, additional_actions \\ [redemand: :output], state) do
     {packet, last_item_size} = Serializer.serialize(segment, state.last_item_size)
     state = Map.put(state, :last_item_size, last_item_size)
-    {{:ok, buffer: {:output, %Buffer{payload: packet}}}, state}
+    actions = Enum.concat([buffer: {:output, %Buffer{payload: packet}}], additional_actions)
+    {{:ok, actions}, state}
   end
 end

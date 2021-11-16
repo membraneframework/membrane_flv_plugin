@@ -5,13 +5,21 @@ defmodule TestPipeline do
   def handle_init(_opts) do
     spec = %ParentSpec{
       children: [
-        audio_src: %Membrane.File.Source{location: "test/fixtures/input.aac"},
-        video_src: %Membrane.File.Source{location: "test/fixtures/input.h264"},
+        video_src: %Membrane.Hackney.Source{
+          location:
+            "https://raw.githubusercontent.com/membraneframework/static/gh-pages/video-samples/test-video.h264",
+          hackney_opts: [follow_redirect: true]
+        },
+        audio_src: %Membrane.Hackney.Source{
+          location:
+            "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/test-audio.aac",
+          hackney_opts: [follow_redirect: true]
+        },
         audio_parser: %Membrane.AAC.Parser{
           in_encapsulation: :ADTS,
           out_encapsulation: :none
         },
-        video_parser: %Membrane.H264.FFmpeg.Parser{attach_nalus?: true, framerate: {24, 1}},
+        video_parser: %Membrane.H264.FFmpeg.Parser{attach_nalus?: true, alignment: :au, framerate: {30, 1}},
         video_payloader: Membrane.MP4.Payloader.H264,
         muxer: %Membrane.FLV.Muxer{video_present?: false},
         sink: %Membrane.File.Sink{location: "output.flv"}

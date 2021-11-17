@@ -1,4 +1,13 @@
-defmodule TestPipeline do
+Mix.install([
+  :membrane_core,
+  :membrane_hackney_plugin,
+  :membrane_aac_plugin,
+  :membrane_h264_ffmpeg_plugin,
+  :membrane_mp4_plugin,
+  :membrane_file_plugin,
+  {:membrane_flv_plugin, path: ".."}
+])
+defmodule Example do
   use Membrane.Pipeline
 
   @impl true
@@ -34,6 +43,13 @@ defmodule TestPipeline do
   end
 end
 
-{:ok, pid} = TestPipeline.start_link(:nothing_to_see_here)
-TestPipeline.play(pid)
-Process.sleep(100_000)
+ref =
+  Example.start_link()
+  |> elem(1)
+  |> tap(&Membrane.Pipeline.play/1)
+  |> then(&Process.monitor/1)
+
+receive do
+  {:DOWN, ^ref, :process, _pid, _reason} ->
+    :ok
+end

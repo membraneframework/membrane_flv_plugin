@@ -126,7 +126,8 @@ defmodule Membrane.FLV.Muxer do
     if Enum.any?(ctx.pads, &match?({_, %{direction: :input, end_of_stream?: false}}, &1)) do
       {:ok, state}
     else
-      {{:ok, end_of_stream: :output}, state}
+      last = <<state.last_item_size::32>>
+      {{:ok, buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output}, state}
     end
   end
 

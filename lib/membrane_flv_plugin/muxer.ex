@@ -25,11 +25,21 @@ defmodule Membrane.FLV.Muxer do
 
   def_options audio_present?: [
                 spec: boolean(),
-                default: true
+                default: true,
+                description: """
+                Explicitly signal that audio stream will be present in the container. It is useful if audio stream will connect after playback started.
+
+                Value `false` might be overwritten by the muxer if audio is present on one of the pads.
+                """
               ],
               video_present?: [
                 spec: boolean(),
-                default: true
+                default: true,
+                description: """
+                Explicitly signal that video stream will be present in the container. It is useful if video stream will connect after playback started.
+
+                Value `false` might be overwritten by the muxer if video is present on one of the pads.
+                """
               ]
 
   @impl true
@@ -109,6 +119,16 @@ defmodule Membrane.FLV.Muxer do
   @impl true
   def handle_caps(Pad.ref(type, _id) = _pad, caps, _ctx, _state),
     do: raise("Caps `#{inspect(caps)}` are not supported for stream type #{inspect(type)}")
+
+  @impl true
+  def handle_end_of_stream(_pad, ctx, state) do
+    # Check if there are any input pads that didn't eos. If not, send end of stream on output
+    if Enum.any?(ctx.pads, &match?({_, %{direction: :input, end_of_stream?: false}}, &1)) do
+      {:ok, state}
+    else
+      {{:ok, end_of_stream: :output}, state}
+    end
+  end
 
   defp codec(:audio), do: :AAC
   defp codec(:video), do: :H264

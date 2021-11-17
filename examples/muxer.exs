@@ -41,6 +41,17 @@ defmodule Example do
     }
     {{:ok, spec: spec}, %{}}
   end
+
+  @impl true
+  def handle_element_end_of_stream({:sink, _}, _ctx, state) do
+    Pipeline.stop_and_terminate(self())
+    {:ok, state}
+  end
+
+  @impl true
+  def handle_element_end_of_stream(_, _context, state) do
+    {:ok, state}
+  end
 end
 
 ref =

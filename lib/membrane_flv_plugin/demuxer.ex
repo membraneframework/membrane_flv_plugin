@@ -52,9 +52,10 @@ defmodule Membrane.FLV.Demuxer do
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
-    with {:ok, _header, rest} <- Membrane.FLV.Parser.parse_header(state.partial <> payload) do
-      {{:ok, demand: :input}, %{state | partial: rest, header_present?: false}}
-    else
+    case Membrane.FLV.Parser.parse_header(state.partial <> payload) do
+      {:ok, _header, rest} ->
+        {{:ok, demand: :input}, %{state | partial: rest, header_present?: false}}
+
       {:error, :not_enough_data} ->
         {{:ok, demand: :input}, %{state | partial: state.partial <> payload}}
 
@@ -65,11 +66,12 @@ defmodule Membrane.FLV.Demuxer do
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: false} = state) do
-    with {:ok, frames, rest} <- Parser.parse_packets(state.partial <> payload) do
-      {actions, state} = get_actions(frames, state)
-      actions = Enum.concat(actions, demand: :input)
-      {{:ok, actions}, %{state | partial: rest}}
-    else
+    case Parser.parse_packets(state.partial <> payload) do
+      {:ok, frames, rest} ->
+        {actions, state} = get_actions(frames, state)
+        actions = Enum.concat(actions, demand: :input)
+        {{:ok, actions}, %{state | partial: rest}}
+
       {:error, :not_enough_data} ->
         {{:ok, demand: :input}, %{state | partial: state.partial <> payload}}
     end

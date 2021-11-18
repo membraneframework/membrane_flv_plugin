@@ -40,7 +40,7 @@ defmodule Membrane.FLV.Demuxer.Test do
     def handle_notification(
           {:new_stream, Pad.ref(type, _ref) = pad, _codec},
           :demuxer,
-          ctx,
+          _ctx,
           state
         ) do
       sink =

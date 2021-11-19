@@ -26,7 +26,7 @@ defmodule Example do
         link(:src) |> to(:demuxer),
 
         # Mind you can prelink the pads if you know the stream id that you are interested in
-        link(:demuxer) |> via_out(Pad.ref(:audio, 0)) |> to(:audio_parser) |> to(:audio_sink),
+        link(:demuxer) |> via_out(Pad.ref(:audio, 0)) |> to(:audio_sink),
         link(:demuxer) |> via_out(Pad.ref(:video, 0)) |> to(:video_sink)
       ]
     }

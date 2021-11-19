@@ -3,21 +3,6 @@ defmodule Membrane.FLV.Demuxer.Test do
   import Membrane.Testing.Assertions
   alias Membrane.Testing.Pipeline
 
-  setup do
-    pid = get_pipeline()
-    on_exit(fn -> Pipeline.stop_and_terminate(pid, blocking?: true) end)
-    %{pid: pid}
-  end
-
-  test "streams are detected", %{pid: pid} do
-    assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :H264})
-    assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :AAC})
-    assert_sink_caps(pid, :video_sink, %Membrane.RemoteStream{content_format: :H264}, 3000)
-    assert_sink_caps(pid, :audio_sink, %Membrane.RemoteStream.AAC{}, 3000)
-    assert_sink_buffer(pid, :video_sink, %Membrane.Buffer{})
-    assert_sink_buffer(pid, :audio_sink, %Membrane.Buffer{})
-  end
-
   defmodule Support.Pipeline do
     use Membrane.Pipeline
 
@@ -43,16 +28,16 @@ defmodule Membrane.FLV.Demuxer.Test do
           _ctx,
           state
         ) do
-      sink =
+      {sink_name, file_name} =
         case type do
-          :audio -> :audio_sink
-          :video -> :video_sink
+          :audio -> {:audio_sink, "/tmp/audio.aac"}
+          :video -> {:video_sink, "/tmp/video.h264"}
         end
 
       spec = %ParentSpec{
-        children: %{sink => Membrane.Testing.Sink},
+        children: %{sink_name => %Membrane.File.Sink{location: file_name}},
         links: [
-          link(:demuxer) |> via_out(pad) |> to(sink)
+          link(:demuxer) |> via_out(pad) |> to(sink_name)
         ]
       }
 
@@ -63,7 +48,7 @@ defmodule Membrane.FLV.Demuxer.Test do
     def handle_notification(_notification, _source, _ctx, state), do: {:ok, state}
   end
 
-  defp get_pipeline() do
+  setup do
     {:ok, pid} =
       Pipeline.start_link(%Pipeline.Options{
         module: Support.Pipeline,
@@ -71,6 +56,23 @@ defmodule Membrane.FLV.Demuxer.Test do
       })
 
     :ok = Pipeline.play(pid)
-    pid
+    on_exit(fn -> Pipeline.stop_and_terminate(pid, blocking?: true) end)
+    %{pid: pid}
+  end
+
+  test "streams are detected", %{pid: pid} do
+    assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :H264})
+    assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :AAC})
+    assert_end_of_stream(pid, :video_sink, :input)
+    assert_end_of_stream(pid, :audio_sink, :input)
+
+    assert File.exists?("/tmp/audio.aac")
+    assert File.exists?("/tmp/video.h264")
+
+    audio = File.read!("/tmp/audio.aac")
+    video = File.read!("/tmp/video.h264")
+
+    assert byte_size(audio) > 0
+    assert byte_size(video) > 0
   end
 end

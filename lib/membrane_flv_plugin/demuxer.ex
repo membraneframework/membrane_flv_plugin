@@ -22,7 +22,7 @@ defmodule Membrane.FLV.Demuxer do
   @typedoc """
   Type of notification that is sent when a new FLV stream is detected.
   """
-  @type new_stream_notification() :: {:new_stream, Pad.ref(:audio | :video, 0), codec_t()}
+  @type new_stream_notification() :: {:new_stream, {Membrane.Pad, :audio | :video, 0}, codec_t()}
 
   @typedoc """
   List of formats supported by the demuxer.
@@ -98,14 +98,21 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
-  def handle_end_of_stream(:input, ctx, state) do
-    actions =
-      ctx.pads
-      |> Enum.filter(fn {_key, %{direction: direction}} -> direction == :output end)
-      |> Enum.map(&Bunch.key/1)
-      |> Enum.flat_map(&[end_of_stream: &1])
+  def handle_end_of_stream(:input, _ctx, state) do
+    result =
+      state.pads_buffer
+      |> Enum.map(fn {pad, value} ->
+        if value == :connected do
+          {[end_of_stream: pad], {pad, value}}
+        else
+          {[], {pad, Qex.push(value, {:end_of_stream, pad})}}
+        end
+      end)
 
-    {{:ok, actions}, %{state | pads_buffer: %{}}}
+    actions = Enum.flat_map(result, &elem(&1, 0))
+    pads_buffer = Enum.map(result, &elem(&1, 1)) |> Enum.into(%{})
+
+    {{:ok, actions}, %{state | pads_buffer: pads_buffer}}
   end
 
   defp get_actions(frames, original_state) do

@@ -1,5 +1,7 @@
 defmodule Membrane.FLV do
-  @moduledoc false
+  @moduledoc """
+  Format utilities and internal struct definitions for Membrane FLV Plugin
+  """
 
   @sound_format BiMap.new(%{
                   0 => :pcm,

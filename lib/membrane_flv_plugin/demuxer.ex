@@ -1,6 +1,14 @@
 defmodule Membrane.FLV.Demuxer do
   @moduledoc """
-  Element for demuxing FLV streams into audio and video streams
+  Element for demuxing FLV streams into audio and video streams.
+  FLV format supports only one video and audio stream.
+  They are optional however, FLV without either audio or video is also possible.
+
+  When a new FLV stream is detected, you will be notified with `Membrane.FLV.Demuxer.new_stream_notification()`.
+
+  If you want to pre-link the pipeline and skip handling notifications, make sure use the following output pads:
+  - `Pad.ref(:audio, 0)` for audio stream
+  - `Pad.ref(:video, 0)` for video stream
   """
   use Membrane.Filter
   use Bunch
@@ -10,6 +18,19 @@ defmodule Membrane.FLV.Demuxer do
   alias Membrane.RemoteStream
   alias Membrane.FLV.Parser
   alias Membrane.{Buffer, FLV}
+
+  @typedoc """
+  Type of notification that is sent when a new FLV stream is detected.
+  """
+  @type new_stream_notification() :: {:new_stream, Pad.ref(:audio | :video, 0), codec_t()}
+
+  @typedoc """
+  List of formats supported by the demuxer.
+
+  Only H264 video is supported.
+  Audio codecs other than AAC might now work correctly, although they won't throw any errors.
+  """
+  @type codec_t() :: FLV.audio_format_t() | :H264
 
   def_input_pad :input,
     availability: :always,
@@ -24,20 +45,12 @@ defmodule Membrane.FLV.Demuxer do
 
   def_output_pad :video,
     availability: :on_request,
-    caps: RemoteStream,
+    caps: {RemoteStream, content_format: :H264},
     mode: :pull
 
-  def_options header_present?: [
-                spec: boolean(),
-                default: true,
-                description: """
-                Define whether the FLV header is present in the stream
-                """
-              ]
-
   @impl true
-  def handle_init(%__MODULE__{} = opts) do
-    {:ok, Map.from_struct(opts) |> Map.merge(%{partial: <<>>, pads_buffer: %{}, aac_asc: <<>>})}
+  def handle_init(_opts) do
+    {:ok, %{partial: <<>>, pads_buffer: %{}, aac_asc: <<>>, header_present?: true}}
   end
 
   @impl true
@@ -66,7 +79,7 @@ defmodule Membrane.FLV.Demuxer do
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: false} = state) do
-    case Parser.parse_packets(state.partial <> payload) do
+    case Parser.parse_body(state.partial <> payload) do
       {:ok, frames, rest} ->
         {actions, state} = get_actions(frames, state)
         actions = Enum.concat(actions, demand: :input)
@@ -114,19 +127,19 @@ defmodule Membrane.FLV.Demuxer do
           buffer = %Buffer{payload: get_payload(packet, state)}
           {:buffer, {pad, buffer}}
       end
-      |> do_out_action(packet, state)
+      |> buffer_or_send(packet, state)
       |> then(fn {out_actions, state} -> {actions ++ out_actions, state} end)
     end)
   end
 
-  defp do_out_action(actions, packet, state) when is_list(actions) do
+  defp buffer_or_send(actions, packet, state) when is_list(actions) do
     Enum.reduce(actions, {[], state}, fn action, {actions, state} ->
-      {out_actions, state} = do_out_action(action, packet, state)
+      {out_actions, state} = buffer_or_send(action, packet, state)
       {actions ++ out_actions, state}
     end)
   end
 
-  defp do_out_action(action, packet, state) when not is_list(action) do
+  defp buffer_or_send(action, packet, state) when not is_list(action) do
     pad = pad(packet)
 
     cond do
@@ -139,7 +152,7 @@ defmodule Membrane.FLV.Demuxer do
 
       true ->
         state = put_in(state, [:pads_buffer, pad(packet)], Qex.new([action]))
-        {notify_about(packet), state}
+        {notify_about_new_stream(packet), state}
     end
   end
 
@@ -155,7 +168,7 @@ defmodule Membrane.FLV.Demuxer do
 
   defp get_payload(packet, _state), do: packet.payload
 
-  defp notify_about(packet) do
+  defp notify_about_new_stream(packet) do
     [notify: {:new_stream, pad(packet), packet.codec}]
   end
 

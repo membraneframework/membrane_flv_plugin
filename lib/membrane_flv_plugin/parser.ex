@@ -6,14 +6,14 @@ defmodule Membrane.FLV.Parser do
 
   @spec parse_header(binary()) :: {:ok, Header.t(), binary()} | {:error, reason :: any()}
   def parse_header(
-        <<"FLV", 0x01::8, 0::5, audio_present?::1, 0::1, video_present?::1, data_offset::32,
-          _rest::binary>> = data
+        <<"FLV", 0x01::8, 0::5, type_flags_audio::1, 0::1, type_flags_video::1, data_offset::32,
+          _body::binary>> = data
       ) do
     case data do
       <<_header::binary-size(data_offset), rest::binary>> ->
         %Header{
-          audio_present?: parse_flag(audio_present?),
-          video_present?: parse_flag(video_present?)
+          audio_present?: type_flags_audio == 1,
+          video_present?: type_flags_video == 1
         }
         |> then(&{:ok, &1, rest})
 
@@ -25,21 +25,23 @@ defmodule Membrane.FLV.Parser do
   def parse_header(data) when byte_size(data) < 9, do: {:error, :not_enough_data}
   def parse_header(_incorrect_data), do: {:error, :not_a_header}
 
-  @spec parse_packets(binary()) ::
+  @spec parse_body(binary()) ::
           {:ok, packets :: [Packet.t()], rest :: binary()} | {:error, :not_enough_data}
-  def parse_packets(data) when byte_size(data) < 15, do: {:error, :not_enough_data}
+  def parse_body(data) when byte_size(data) < 15, do: {:error, :not_enough_data}
 
-  def parse_packets(<<_head::40, data_size::24, _rest::binary>> = data)
+  def parse_body(<<_head::40, data_size::24, _rest::binary>> = data)
       when byte_size(data) < data_size + 15,
       do: {:error, :not_enough_data}
 
-  def parse_packets(
+  # script data - ignoring it and continuing with following TAGs
+  def parse_body(
         <<_head::34, 0::1, 18::5, data_size::24, _ts::24, _tsx::8, _sid::24,
           _payload::binary-size(data_size), rest::binary>>
       ),
-      do: parse_packets(rest)
+      do: parse_body(rest)
 
-  def parse_packets(<<
+  # proper TAG
+  def parse_body(<<
         _previous_tag_size::32,
         _reserved::2,
         0::1,
@@ -63,7 +65,7 @@ defmodule Membrane.FLV.Parser do
       codec_params: codec_params
     }
 
-    case parse_packets(rest) do
+    case parse_body(rest) do
       {:ok, packets, rest} ->
         {:ok, [packet | packets], rest}
 
@@ -72,9 +74,11 @@ defmodule Membrane.FLV.Parser do
     end
   end
 
-  def parse_packets(_too_little_data), do: {:error, :not_enough_data}
+  def parse_body(_too_little_data), do: {:error, :not_enough_data}
 
   # AAC
+  # It requires special handling. We are ignoring all of the parameters set in header and some
+  # of them need to hold predefined values. Audio parameters are supposed to be extracted from audio_config
   defp parse_payload(
          :audio,
          <<10::4, 3::2, _sound_size::1, 1::1, packet_type::8, payload::binary>>
@@ -110,9 +114,9 @@ defmodule Membrane.FLV.Parser do
     {:audio, codec, {sound_rate, sound_type}, payload}
   end
 
+  # AVC H264
   defp parse_payload(:video, <<
          _frame_type::4,
-         # AVC H264
          7::4,
          packet_type::8,
          _composition_time::24,
@@ -126,9 +130,6 @@ defmodule Membrane.FLV.Parser do
     vcodec = FLV.index_to_video_codec(codec) |> inspect()
     raise("Video codec #{vcodec} is not yet supported")
   end
-
-  defp parse_flag(1), do: true
-  defp parse_flag(0), do: false
 
   defp resolve_type(8), do: :audio
   defp resolve_type(9), do: :video

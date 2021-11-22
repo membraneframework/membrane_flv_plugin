@@ -33,10 +33,13 @@ defmodule Membrane.FLV.Parser do
       when byte_size(data) < data_size + 15,
       do: {:error, :not_enough_data}
 
+  def parse_body(<<_head::96, stream_id::24, _rest::binary>>) when stream_id != 0,
+    do: raise("Stream id has to be 0. Is `#{stream_id}`")
+
   # script data - ignoring it and continuing with following TAGs
   def parse_body(
-        <<_head::34, 0::1, 18::5, data_size::24, _ts::24, _tsx::8, _sid::24,
-          _payload::binary-size(data_size), rest::binary>>
+        <<_head::34, 0::1, 18::5, data_size::24, _timestamp::24, _timestamp_extended::8,
+          _stream_id::24, _payload::binary-size(data_size), rest::binary>>
       ),
       do: parse_body(rest)
 
@@ -77,8 +80,7 @@ defmodule Membrane.FLV.Parser do
   def parse_body(_too_little_data), do: {:error, :not_enough_data}
 
   # AAC
-  # It requires special handling. We are ignoring all of the parameters set in header and some
-  # of them need to hold predefined values. Audio parameters are supposed to be extracted from audio_config
+  # Ignore parameters set in the header. They are supposed to be extracted from Audio Specific Config
   defp parse_payload(
          :audio,
          <<10::4, 3::2, _sound_size::1, 1::1, packet_type::8, payload::binary>>

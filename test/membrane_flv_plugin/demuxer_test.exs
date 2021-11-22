@@ -56,7 +56,13 @@ defmodule Membrane.FLV.Demuxer.Test do
       })
 
     :ok = Pipeline.play(pid)
-    on_exit(fn -> Pipeline.stop_and_terminate(pid, blocking?: true) end)
+
+    on_exit(fn ->
+      Pipeline.stop_and_terminate(pid, blocking?: true)
+      File.rm!("/tmp/audio.aac")
+      File.rm!("/tmp/video.h264")
+    end)
+
     %{pid: pid}
   end
 
@@ -72,7 +78,7 @@ defmodule Membrane.FLV.Demuxer.Test do
     audio = File.read!("/tmp/audio.aac")
     video = File.read!("/tmp/video.h264")
 
-    assert byte_size(audio) > 0
-    assert byte_size(video) > 0
+    assert byte_size(audio) == 94_402
+    assert byte_size(video) == 204_166
   end
 end

@@ -22,13 +22,14 @@ defmodule Membrane.FLV.Demuxer do
   @typedoc """
   Type of notification that is sent when a new FLV stream is detected.
   """
-  @type new_stream_notification() :: {:new_stream, {Membrane.Pad, :audio | :video, 0}, codec_t()}
+  @type new_stream_notification_t() ::
+          {:new_stream, {Membrane.Pad, type :: :audio | :video, stream_id :: 0}, codec_t()}
 
   @typedoc """
   List of formats supported by the demuxer.
 
-  Only H264 video is supported.
-  Audio codecs other than AAC might now work correctly, although they won't throw any errors.
+  For video, only H264 is supported
+  Audio codecs other than AAC might not work correctly, although they won't throw any errors.
   """
   @type codec_t() :: FLV.audio_format_t() | :H264
 

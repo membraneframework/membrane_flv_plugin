@@ -36,11 +36,11 @@ defmodule Membrane.FLV.Mixfile do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.7"},
-      {:membrane_aac_format, "~> 0.4.0"},
+      {:membrane_core, "~> 0.8"},
+      {:membrane_aac_format, "~> 0.5.0"},
       {:membrane_caps_video_h264,
        github: "membraneframework/membrane-caps-video-h264", branch: "remote-caps"},
-      {:membrane_file_plugin, "~> 0.6", only: :test},
+      {:membrane_file_plugin, "~> 0.7", only: :test},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
       {:dialyxir, "~> 1.1", only: :dev, runtime: false},
       {:credo, "~> 1.5", only: :dev, runtime: false},

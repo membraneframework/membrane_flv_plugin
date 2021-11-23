@@ -1,12 +1,12 @@
-defmodule Membrane.Template.Mixfile do
+defmodule Membrane.FLV.Mixfile do
   use Mix.Project
 
   @version "0.1.0"
-  @github_url "https://github.com/membraneframework/membrane_template_plugin"
+  @github_url "https://github.com/membraneframework/membrane_flv_plugin"
 
   def project do
     [
-      app: :membrane_template_plugin,
+      app: :membrane_flv_plugin,
       version: @version,
       elixir: "~> 1.12",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -14,11 +14,11 @@ defmodule Membrane.Template.Mixfile do
       deps: deps(),
 
       # hex
-      description: "Template Plugin for Membrane Multimedia Framework",
+      description: "FLV Container implementation for Membrane Framework",
       package: package(),
 
       # docs
-      name: "Membrane Template plugin",
+      name: "Membrane FLV Plugin",
       source_url: @github_url,
       homepage_url: "https://membraneframework.org",
       docs: docs()
@@ -36,10 +36,16 @@ defmodule Membrane.Template.Mixfile do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.7.0"},
+      {:membrane_core, "~> 0.8"},
+      {:membrane_aac_format, "~> 0.5.0"},
+      {:membrane_caps_video_h264,
+       github: "membraneframework/membrane-caps-video-h264", branch: "remote-caps"},
+      {:membrane_file_plugin, "~> 0.7", only: :test},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
       {:dialyxir, "~> 1.1", only: :dev, runtime: false},
-      {:credo, "~> 1.5", only: :dev, runtime: false}
+      {:credo, "~> 1.5", only: :dev, runtime: false},
+      {:bimap, "~> 1.2"},
+      {:bunch, "~> 1.3"}
     ]
   end
 
@@ -59,7 +65,7 @@ defmodule Membrane.Template.Mixfile do
       main: "readme",
       extras: ["README.md", "LICENSE"],
       source_ref: "v#{@version}",
-      nest_modules_by_prefix: [Membrane.Template]
+      nest_modules_by_prefix: [Membrane.FLV]
     ]
   end
 end

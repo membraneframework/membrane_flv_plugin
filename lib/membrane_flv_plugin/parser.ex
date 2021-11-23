@@ -38,8 +38,8 @@ defmodule Membrane.FLV.Parser do
 
   # script data - ignoring it and continuing with following TAGs
   def parse_body(
-        <<_head::34, 0::1, 18::5, data_size::24, _timestamp::24, _timestamp_extended::8,
-          _stream_id::24, _payload::binary-size(data_size), rest::binary>>
+        <<_head::32, _reserved::2, 0::1, 18::5, data_size::24, _timestamp::24,
+          _timestamp_extended::8, _stream_id::24, _payload::binary-size(data_size), rest::binary>>
       ),
       do: parse_body(rest)
 

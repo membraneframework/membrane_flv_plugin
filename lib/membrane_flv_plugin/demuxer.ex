@@ -22,8 +22,7 @@ defmodule Membrane.FLV.Demuxer do
   @typedoc """
   Type of notification that is sent when a new FLV stream is detected.
   """
-  @type new_stream_notification_t() ::
-          {:new_stream, {Membrane.Pad, type :: :audio | :video, stream_id :: 0}, codec_t()}
+  @type new_stream_notification_t() :: {:new_stream, Membrane.Pad.ref_t(), codec_t()}
 
   @typedoc """
   List of formats supported by the demuxer.

@@ -134,7 +134,7 @@ defmodule Membrane.FLV.Demuxer do
               stream_format: :byte_stream
             }}}
 
-        type in [:audio_config, :video_config] ->
+        type == :audio_config ->
           [
             caps: {pad, %RemoteStream{content_format: packet.codec}},
             buffer: {pad, %Buffer{payload: get_payload(packet, state)}}

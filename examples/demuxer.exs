@@ -37,12 +37,6 @@ defmodule Example do
 
     {{:ok, spec: spec}, %{}}
   end
-
-  @impl true
-  def handle_element_end_of_stream(_child, context, state) do
-    IO.inspect(context, label: :dupa)
-    {:ok, state}
-  end
 end
 
 ref =

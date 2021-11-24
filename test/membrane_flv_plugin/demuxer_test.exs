@@ -79,6 +79,6 @@ defmodule Membrane.FLV.Demuxer.Test do
     video = File.read!("/tmp/video.h264")
 
     assert byte_size(audio) == 94_402
-    assert byte_size(video) == 204_166
+    assert byte_size(video) == 204_127
   end
 end

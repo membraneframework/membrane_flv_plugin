@@ -38,7 +38,7 @@ defmodule Membrane.FLV.Mixfile do
     [
       {:membrane_core, "~> 0.8"},
       {:membrane_aac_format, "~> 0.5.0"},
-      {:membrane_caps_video_h264,
+      {:membrane_h264_format,
        github: "membraneframework/membrane-caps-video-h264", branch: "remote-caps"},
       {:membrane_file_plugin, "~> 0.7", only: :test},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},

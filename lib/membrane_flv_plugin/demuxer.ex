@@ -45,7 +45,7 @@ defmodule Membrane.FLV.Demuxer do
 
   def_output_pad :video,
     availability: :on_request,
-    caps: {RemoteStream, content_format: :H264},
+    caps: {RemoteStream.H264, stream_format: :byte_stream},
     mode: :pull
 
   @impl true
@@ -124,6 +124,16 @@ defmodule Membrane.FLV.Demuxer do
           Membrane.Logger.debug("Audio configuration received")
           {:caps, {pad, %RemoteStream.AAC{audio_specific_config: packet.payload}}}
 
+        type == :video_config and packet.codec == :H264 ->
+          Membrane.Logger.debug("Video configuration received")
+
+          {:caps,
+           {pad,
+            %RemoteStream.H264{
+              decoder_configuration_record: packet.payload,
+              stream_format: :byte_stream
+            }}}
+
         type in [:audio_config, :video_config] ->
           [
             caps: {pad, %RemoteStream{content_format: packet.codec}},
@@ -161,12 +171,6 @@ defmodule Membrane.FLV.Demuxer do
         state = put_in(state, [:pads_buffer, pad(packet)], Qex.new([action]))
         {notify_about_new_stream(packet), state}
     end
-  end
-
-  defp get_payload(%FLV.Packet{type: :video_config, codec: :H264} = packet, _state) do
-    # TODO: Would be great if this was handled by H264 decoder, just like conversion from AVC1 to Annex B
-    {:ok, %{pps: [pps], sps: [sps]}} = Membrane.H264.DecoderConfiguration.parse(packet.payload)
-    <<0, 0, 1>> <> sps <> <<0, 0, 1>> <> pps
   end
 
   defp get_payload(%FLV.Packet{type: :video, codec: :H264} = packet, _state) do

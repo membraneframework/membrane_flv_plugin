@@ -124,6 +124,12 @@ defmodule Membrane.FLV.Demuxer do
           Membrane.Logger.debug("Audio configuration received")
           {:caps, {pad, %RemoteStream.AAC{audio_specific_config: packet.payload}}}
 
+        type == :audio_config ->
+          [
+            caps: {pad, %RemoteStream{content_format: packet.codec}},
+            buffer: {pad, %Buffer{payload: get_payload(packet, state)}}
+          ]
+
         type == :video_config and packet.codec == :H264 ->
           Membrane.Logger.debug("Video configuration received")
 
@@ -133,12 +139,6 @@ defmodule Membrane.FLV.Demuxer do
               decoder_configuration_record: packet.payload,
               stream_format: :byte_stream
             }}}
-
-        type == :audio_config ->
-          [
-            caps: {pad, %RemoteStream{content_format: packet.codec}},
-            buffer: {pad, %Buffer{payload: get_payload(packet, state)}}
-          ]
 
         true ->
           buffer = %Buffer{payload: get_payload(packet, state)}

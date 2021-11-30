@@ -1,6 +1,6 @@
 defmodule Membrane.FLV.Muxer do
   @moduledoc """
-  FLV container muxer
+  Element for muxing AAC and H264 streams into FLV format. It only supports one video and one audio stream.
   """
   use Membrane.Filter
   alias Membrane.{AAC, FLV, Buffer}
@@ -27,7 +27,8 @@ defmodule Membrane.FLV.Muxer do
                 spec: boolean(),
                 default: true,
                 description: """
-                Explicitly signal that audio stream will be present in the container. It is useful if audio stream will connect after playback started.
+                Explicitly signal that audio stream will be present in the container.
+                It is useful if audio stream will connect after playback started.
 
                 Value `false` might be overwritten by the muxer if audio is present on one of the pads.
                 """
@@ -36,7 +37,8 @@ defmodule Membrane.FLV.Muxer do
                 spec: boolean(),
                 default: true,
                 description: """
-                Explicitly signal that video stream will be present in the container. It is useful if video stream will connect after playback started.
+                Explicitly signal that video stream will be present in the container.
+                It is useful if video stream will connect after playback started.
 
                 Value `false` might be overwritten by the muxer if video is present on one of the pads.
                 """
@@ -53,7 +55,7 @@ defmodule Membrane.FLV.Muxer do
   end
 
   @impl true
-  def handle_pad_added(pad, ctx, state) do
+  def handle_pad_added(Pad.ref(_type, 0) = pad, ctx, state) do
     state = put_in(state, [:timestamps, pad], 0)
 
     if ctx.playback_state == :playing do
@@ -62,6 +64,10 @@ defmodule Membrane.FLV.Muxer do
       {:ok, state}
     end
   end
+
+  @impl true
+  def handle_pad_added(Pad.ref(_type, stream_id), _ctx, _state) when stream_id != 0,
+    do: raise(ArgumentError, message: "Stream id must always be 0")
 
   @impl true
   def handle_demand(:output, size, :buffers, _ctx, state) do

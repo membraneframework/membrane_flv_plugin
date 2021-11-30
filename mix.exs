@@ -46,7 +46,7 @@ defmodule Membrane.FLV.Mixfile do
       {:membrane_mp4_plugin, "~> 0.8", only: :test},
       {:membrane_h264_ffmpeg_plugin, "~> 0.14"},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false},
-      {:credo, "~> 1.5", only: :test, runtime: false},
+      {:credo, "~> 1.5", runtime: false},
       {:bimap, "~> 1.2"},
       {:bunch, "~> 1.3"}
     ]

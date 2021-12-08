@@ -28,7 +28,7 @@ defmodule Membrane.FLV.Muxer.Test do
             framerate: {30, 1}
           },
           video_payloader: Membrane.MP4.Payloader.H264,
-          muxer: %Membrane.FLV.Muxer{video_present?: false},
+          muxer: Membrane.FLV.Muxer,
           sink: %Membrane.File.Sink{location: @output}
         ],
         links: [

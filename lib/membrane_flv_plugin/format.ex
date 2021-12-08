@@ -75,21 +75,24 @@ defmodule Membrane.FLV do
     @moduledoc false
 
     @enforce_keys [
-      :timestamp,
+      :pts,
+      :dts,
       :stream_id,
       :type,
       :payload,
       :codec
     ]
-    defstruct @enforce_keys ++ [:codec_params]
+    defstruct @enforce_keys ++ [:codec_params, :frame_type]
 
     @type t() :: %__MODULE__{
-            timestamp: timestamp_t(),
+            pts: timestamp_t(),
+            dts: timestamp_t() | nil,
             stream_id: stream_id_t(),
             type: type_t(),
             payload: binary(),
             codec: Membrane.FLV.audio_codec_t() | Membrane.FLV.video_codec_t(),
-            codec_params: nil | audio_params_t()
+            codec_params: nil | audio_params_t(),
+            frame_type: frame_type_t() | nil
           }
 
     defguard is_audio(packet) when packet.type in [:audio, :audio_config]
@@ -99,5 +102,6 @@ defmodule Membrane.FLV do
     @type stream_id_t() :: non_neg_integer()
     @type timestamp_t() :: non_neg_integer()
     @type audio_params_t() :: {sound_rate :: non_neg_integer(), sound_format :: :mono | :stereo}
+    @type frame_type_t() :: :keyframe | :interframe
   end
 end

@@ -14,7 +14,7 @@ defmodule Membrane.FLV.Serializer do
       ) do
     <<
       "FLV",
-      # verson
+      # version
       0x01::8,
       # reserved,
       0::5,
@@ -28,19 +28,21 @@ defmodule Membrane.FLV.Serializer do
   end
 
   def serialize(%Packet{} = packet, previous_tag_size) do
-    <<previous_tag_size::32, flv_tag(packet)::binary>>
+    <<previous_tag_size::32, tag(packet)::binary>>
     |> then(&{&1, byte_size(&1) - 4})
   end
 
-  defp flv_tag(%Packet{} = packet) do
+  defp tag(%Packet{} = packet) do
     tag_header = tag_header(packet)
     data_size = byte_size(tag_header) + byte_size(packet.payload)
 
     <<
-      0::3,
+      0::2,
+      # we don't support FLV encryption
+      0::1,
       tag_type(packet)::5,
       data_size::24,
-      packet.timestamp::24,
+      packet.dts::24,
       0::8,
       packet.stream_id::24,
       tag_header::binary,
@@ -54,6 +56,9 @@ defmodule Membrane.FLV.Serializer do
   defp tag_type(packet) when Packet.is_audio(packet), do: 8
   defp tag_type(packet) when Packet.is_video(packet), do: 9
 
+  # If the SoundFormat indicates AAC, the SoundType should be 1 (stereo) and the SoundRate should be 3 (44 kHz).
+  # However, this does not mean that AAC audio in FLV is always stereo, 44 kHz data. Instead, the Flash Player ignores
+  # these values and extracts the channel and sample rate data is encoded in the AAC bit stream.
   @aac_common_header <<10::4, 3::2, 1::1, 1::1>>
   defp tag_header(%Packet{type: :audio, codec: :AAC}), do: <<@aac_common_header, 1::8>>
   defp tag_header(%Packet{type: :audio_config, codec: :AAC}), do: <<@aac_common_header, 0::8>>
@@ -63,25 +68,33 @@ defmodule Membrane.FLV.Serializer do
     raise ArgumentError, message: "Audio codec #{codec} is not supported"
   end
 
-  defp tag_header(%Packet{type: :video, codec: :H264}) do
+  defp tag_header(%Packet{type: :video, codec: :H264} = packet) do
+    frame_type =
+      case packet.frame_type do
+        :keyframe -> 1
+        :interframe -> 2
+      end
+
+    composition_time = (packet.pts - packet.dts) |> div(90)
+
     <<
       # TODO: Actually use frame type
-      1::4,
+      frame_type::4,
       # Hardcoded H264
       7::4,
       1::8,
-      0::24-signed
+      composition_time::24-signed
     >>
   end
 
   defp tag_header(%Packet{type: :video_config, codec: :H264}) do
     <<
-      # TODO: Actually use frame type
+      # Looks like FFmpeg accepts everything but 5, so it's going to be 1
       1::4,
       # Hardcoded H264
       7::4,
       0::8,
-      0::24
+      0::24-signed
     >>
   end
 
@@ -90,8 +103,8 @@ defmodule Membrane.FLV.Serializer do
     raise ArgumentError, message: "Video codec #{codec} is not supported"
   end
 
-  @spec acc_to_audio_specific_config(AAC.t()) :: binary()
-  def acc_to_audio_specific_config(%AAC{} = caps) do
+  @spec aac_to_audio_specific_config(AAC.t()) :: binary()
+  def aac_to_audio_specific_config(%AAC{} = caps) do
     aot = AAC.profile_to_aot_id(caps.profile)
     sr_index = AAC.sample_rate_to_sampling_frequency_id(caps.sample_rate)
     channel_configuration = AAC.channels_to_channel_config_id(caps.channels)

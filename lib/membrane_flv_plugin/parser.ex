@@ -59,8 +59,11 @@ defmodule Membrane.FLV.Parser do
     type = resolve_type(type)
     {type, codec, codec_params, payload} = parse_payload(type, payload)
 
+    timestamp = parse_timestamp(timestamp, timestamp_extended)
+
     packet = %Packet{
-      timestamp: parse_timestamp(timestamp, timestamp_extended),
+      pts: timestamp,
+      dts: timestamp,
       stream_id: stream_id,
       type: type,
       payload: payload,

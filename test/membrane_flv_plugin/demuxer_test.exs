@@ -52,7 +52,7 @@ defmodule Membrane.FLV.Demuxer.Test do
     {:ok, pid} =
       Pipeline.start_link(%Pipeline.Options{
         module: Support.Pipeline,
-        custom_args: "test/fixtures/input.flv"
+        custom_args: "test/fixtures/reference.flv"
       })
 
     :ok = Pipeline.play(pid)
@@ -78,7 +78,7 @@ defmodule Membrane.FLV.Demuxer.Test do
     audio = File.read!("/tmp/audio.aac")
     video = File.read!("/tmp/video.h264")
 
-    assert byte_size(audio) == 94_402
-    assert byte_size(video) == 204_127
+    assert byte_size(audio) == 93_279
+    assert byte_size(video) == 144_577
   end
 end

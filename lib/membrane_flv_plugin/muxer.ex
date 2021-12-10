@@ -28,7 +28,7 @@ defmodule Membrane.FLV.Muxer do
     {:ok,
      %{
        previous_tag_size: 0,
-       timestamps: %{},
+       last_dts: %{},
        header_sent: false
      }}
   end
@@ -43,7 +43,7 @@ defmodule Membrane.FLV.Muxer do
 
   @impl true
   def handle_pad_added(Pad.ref(_type, 0) = pad, _ctx, state) do
-    state = put_in(state, [:timestamps, pad], 0)
+    state = put_in(state, [:last_dts, pad], 0)
     {:ok, state}
   end
 
@@ -56,11 +56,6 @@ defmodule Membrane.FLV.Muxer do
       }
       |> prepare_to_send(state)
 
-    demand_actions =
-      ctx.pads |> Map.drop([Pad.ref(:output)]) |> Map.keys() |> Enum.flat_map(&[demand: {&1, 1}])
-
-    actions = Enum.concat(actions, demand_actions)
-
     {{:ok, actions}, state}
   end
 
@@ -68,7 +63,7 @@ defmodule Membrane.FLV.Muxer do
   def handle_demand(:output, _size, :buffers, _ctx, state) do
     # We will request one buffer from the stream that has the lowest timestamp
     # This will ensure that the output stream has reasonable audio / video balance
-    {pad, _pts} = Enum.min_by(state.timestamps, &Bunch.value/1)
+    {pad, _pts} = Enum.min_by(state.last_dts, &Bunch.value/1)
     {{:ok, [demand: {pad, 1}]}, state}
   end
 
@@ -77,7 +72,9 @@ defmodule Membrane.FLV.Muxer do
     if ctx.pads[pad].caps == nil,
       do: raise("Caps must be sent before sending a packet")
 
-    state = put_in(state, [:timestamps, pad], buffer.pts)
+    dts = get_timestamp(buffer.dts || buffer.pts)
+    pts = get_timestamp(buffer.pts || dts)
+    state = put_in(state, [:last_dts, pad], dts)
 
     {actions, state} =
       %Packet{
@@ -85,13 +82,10 @@ defmodule Membrane.FLV.Muxer do
         stream_id: stream_id,
         payload: buffer.payload,
         codec: codec(type),
-        pts: get_timestamp(buffer.pts || buffer.dts),
-        dts: get_timestamp(buffer.dts || buffer.pts),
+        pts: pts,
+        dts: dts,
         frame_type:
-          if(type == :audio,
-            do: :keyframe,
-            else: if(buffer.metadata.h264.key_frame?, do: :keyframe, else: :interframe)
-          )
+          if(type == :audio or buffer.metadata.h264.key_frame?, do: :keyframe, else: :interframe)
       }
       |> prepare_to_send(state)
 
@@ -100,7 +94,7 @@ defmodule Membrane.FLV.Muxer do
 
   @impl true
   def handle_caps(Pad.ref(:audio, stream_id) = pad, %AAC{} = caps, _ctx, state) do
-    timestamp = Map.get(state.timestamps, pad, 0) |> get_timestamp()
+    timestamp = Map.get(state.last_dts, pad, 0) |> get_timestamp()
 
     %Packet{
       type: :audio_config,
@@ -121,7 +115,7 @@ defmodule Membrane.FLV.Muxer do
         _ctx,
         state
       ) do
-    timestamp = Map.get(state.timestamps, pad, 0) |> get_timestamp()
+    timestamp = Map.get(state.last_dts, pad, 0) |> get_timestamp()
 
     %Packet{
       type: :video_config,
@@ -142,7 +136,7 @@ defmodule Membrane.FLV.Muxer do
   @impl true
   def handle_end_of_stream(pad, ctx, state) do
     # Check if there are any input pads that didn't eos. If not, send end of stream on output
-    state = Map.update!(state, :timestamps, &Map.delete(&1, pad))
+    state = Map.update!(state, :last_dts, &Map.delete(&1, pad))
 
     if Enum.any?(ctx.pads, &match?({_, %{direction: :input, end_of_stream?: false}}, &1)) do
       {:ok, state}

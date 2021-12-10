@@ -59,11 +59,13 @@ defmodule Membrane.FLV.Parser do
     type = resolve_type(type)
     {type, codec, codec_params, payload} = parse_payload(type, payload)
 
-    timestamp = parse_timestamp(timestamp, timestamp_extended)
+    dts = parse_timestamp(timestamp, timestamp_extended)
+    # if composition time is not set in codec_params, then we assume it's 0
+    pts = dts + Map.get(codec_params, :composition_time, 0)
 
     packet = %Packet{
-      pts: timestamp,
-      dts: timestamp,
+      pts: pts,
+      dts: dts,
       stream_id: stream_id,
       type: type,
       payload: payload,
@@ -89,7 +91,7 @@ defmodule Membrane.FLV.Parser do
          <<10::4, 3::2, _sound_size::1, 1::1, packet_type::8, payload::binary>>
        ) do
     type = if packet_type == 1, do: :audio, else: :audio_config
-    {type, :AAC, nil, payload}
+    {type, :AAC, %{}, payload}
   end
 
   # everything else
@@ -116,7 +118,7 @@ defmodule Membrane.FLV.Parser do
         1 -> :stereo
       end
 
-    {:audio, codec, {sound_rate, sound_type}, payload}
+    {:audio, codec, %{sound_rate: sound_rate, sound_type: sound_type}, payload}
   end
 
   # AVC H264
@@ -124,11 +126,11 @@ defmodule Membrane.FLV.Parser do
          _frame_type::4,
          7::4,
          packet_type::8,
-         _composition_time::24,
+         composition_time::24,
          payload::binary
        >>) do
     type = if packet_type == 0, do: :video_config, else: :video
-    {type, :H264, nil, payload}
+    {type, :H264, %{composition_time: composition_time}, payload}
   end
 
   defp parse_payload(:video, <<_frame_type::4, codec::4, _rest::binary>>) do

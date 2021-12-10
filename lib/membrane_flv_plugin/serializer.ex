@@ -75,10 +75,9 @@ defmodule Membrane.FLV.Serializer do
         :interframe -> 2
       end
 
-    composition_time = (packet.pts - packet.dts) |> div(90)
+    composition_time = packet.pts - packet.dts
 
     <<
-      # TODO: Actually use frame type
       frame_type::4,
       # Hardcoded H264
       7::4,

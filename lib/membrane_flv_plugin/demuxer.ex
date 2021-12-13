@@ -40,12 +40,12 @@ defmodule Membrane.FLV.Demuxer do
 
   def_output_pad :audio,
     availability: :on_request,
-    caps: [RemoteStream, RemoteStream.AAC],
+    caps: [RemoteStream, Membrane.AAC.RemoteStream],
     mode: :pull
 
   def_output_pad :video,
     availability: :on_request,
-    caps: {RemoteStream.H264, stream_format: :byte_stream},
+    caps: {Membrane.H264.RemoteStream, stream_format: :byte_stream},
     mode: :pull
 
   @impl true
@@ -122,7 +122,7 @@ defmodule Membrane.FLV.Demuxer do
       cond do
         type == :audio_config and packet.codec == :AAC ->
           Membrane.Logger.debug("Audio configuration received")
-          {:caps, {pad, %RemoteStream.AAC{audio_specific_config: packet.payload}}}
+          {:caps, {pad, %Membrane.AAC.RemoteStream{audio_specific_config: packet.payload}}}
 
         type == :audio_config ->
           [
@@ -135,7 +135,7 @@ defmodule Membrane.FLV.Demuxer do
 
           {:caps,
            {pad,
-            %RemoteStream.H264{
+            %Membrane.H264.RemoteStream{
               decoder_configuration_record: packet.payload,
               stream_format: :byte_stream
             }}}

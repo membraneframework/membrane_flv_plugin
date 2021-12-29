@@ -7,11 +7,12 @@ Mix.install([
   :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
+
 defmodule Example do
   use Membrane.Pipeline
 
   @static_address "https://raw.githubusercontent.com/membraneframework/static/gh-pages"
-  @video_input @static_address <> "/video_samples/test-video.h264"
+  @video_input @static_address <> "/samples/ffmpeg-testsrc.h264"
   @audio_input @static_address <> "/samples/test-audio.aac"
 
   @output_file "output.flv"
@@ -34,7 +35,7 @@ defmodule Example do
         },
         video_parser: %Membrane.H264.FFmpeg.Parser{attach_nalus?: true, alignment: :au, framerate: {30, 1}},
         video_payloader: Membrane.MP4.Payloader.H264,
-        muxer: %Membrane.FLV.Muxer{video_present?: false},
+        muxer: Membrane.FLV.Muxer,
         sink: %Membrane.File.Sink{location: @output_file}
       ],
       links: [

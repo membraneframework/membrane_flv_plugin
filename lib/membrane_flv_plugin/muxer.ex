@@ -1,6 +1,13 @@
 defmodule Membrane.FLV.Muxer do
   @moduledoc """
-  Element for muxing AAC and H264 streams into FLV format. It only supports one video and one audio stream.
+  Element for muxing AAC and H264 streams into FLV format.
+
+  Input pads are dynamic, but you nend to connect them before transitioning to state `playing`.
+
+  Due to limitations of the FLV format, only one audio and one video stream can be muxed and they both need to have a stream_id of 0.
+  Therefore, please make sure you only use the following pads:
+  - `Pad.ref(:audio, 0)`
+  - `Pad.ref(:video, 0)`
   """
   use Membrane.Filter
   alias Membrane.{AAC, FLV, Buffer}

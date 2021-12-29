@@ -30,7 +30,7 @@ defmodule Membrane.FLV.Demuxer do
   For video, only H264 is supported
   Audio codecs other than AAC might not work correctly, although they won't throw any errors.
   """
-  @type codec_t() :: FLV.audio_format_t() | :H264
+  @type codec_t() :: FLV.audio_codec_t() | :H264
 
   def_input_pad :input,
     availability: :always,

@@ -23,21 +23,44 @@ defmodule Membrane.FLV.Demuxer.Test do
 
     @impl true
     def handle_notification(
-          {:new_stream, Pad.ref(type, _ref) = pad, _codec},
+          {:new_stream, Pad.ref(:audio, _ref) = pad, :AAC},
           :demuxer,
           _ctx,
           state
         ) do
-      {sink_name, file_name} =
-        case type do
-          :audio -> {:audio_sink, "/tmp/audio.aac"}
-          :video -> {:video_sink, "/tmp/video.h264"}
-        end
-
       spec = %ParentSpec{
-        children: %{sink_name => %Membrane.File.Sink{location: file_name}},
+        children: %{
+          audio_parser: %Membrane.AAC.Parser{
+            in_encapsulation: :none,
+            out_encapsulation: :ADTS
+          },
+          audio_sink: %Membrane.File.Sink{location: "/tmp/audio.aac"}
+        },
         links: [
-          link(:demuxer) |> via_out(pad) |> to(sink_name)
+          link(:demuxer) |> via_out(pad) |> to(:audio_parser) |> to(:audio_sink)
+        ]
+      }
+
+      {{:ok, spec: spec}, state}
+    end
+
+    @impl true
+    def handle_notification(
+          {:new_stream, Pad.ref(:video, _ref) = pad, :H264},
+          :demuxer,
+          _ctx,
+          state
+        ) do
+      spec = %ParentSpec{
+        children: %{
+          video_parser: %Membrane.H264.FFmpeg.Parser{
+            alignment: :au,
+            framerate: {30, 1}
+          },
+          video_sink: %Membrane.File.Sink{location: "/tmp/video.h264"}
+        },
+        links: [
+          link(:demuxer) |> via_out(pad) |> to(:video_parser) |> to(:video_sink)
         ]
       }
 
@@ -78,7 +101,7 @@ defmodule Membrane.FLV.Demuxer.Test do
     audio = File.read!("/tmp/audio.aac")
     video = File.read!("/tmp/video.h264")
 
-    assert byte_size(audio) == 93_279
-    assert byte_size(video) == 144_577
+    assert byte_size(audio) == 96_303
+    assert byte_size(video) == 144_615
   end
 end

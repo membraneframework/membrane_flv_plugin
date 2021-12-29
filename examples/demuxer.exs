@@ -25,7 +25,7 @@ defmodule Example do
           out_encapsulation: :ADTS
         },
         video_parser: %Membrane.H264.FFmpeg.Parser{
-          framerate: {30, 1}
+          framerate: {30, 1},
         }
       ],
       links: [

@@ -20,7 +20,10 @@ defmodule Membrane.FLV do
                   15 => :device_specific
                 })
 
-  @type audio_format_t() ::
+  @typedoc """
+  List of audio codecs supported by the FLV format.
+  """
+  @type audio_codec_t() ::
           :pcm
           | :adpcm
           | :MP3
@@ -44,13 +47,16 @@ defmodule Membrane.FLV do
                  7 => :H264
                })
 
+  @typedoc """
+  List of video codecs supported by the FLV format.
+  """
   @type video_codec_t() ::
           :sorenson_h263 | :screen_video | :vp6 | :vp6_with_alpha | :screen_video_2 | :H264
 
-  @spec index_to_sound_format(non_neg_integer()) :: audio_format_t()
+  @spec index_to_sound_format(non_neg_integer()) :: audio_codec_t()
   def index_to_sound_format(index), do: BiMap.fetch!(@sound_format, index)
 
-  @spec sound_format_to_index(audio_format_t()) :: non_neg_integer()
+  @spec sound_format_to_index(audio_codec_t()) :: non_neg_integer()
   def sound_format_to_index(format), do: BiMap.fetch_key!(@sound_format, format)
 
   @spec index_to_video_codec(non_neg_integer()) :: video_codec_t()

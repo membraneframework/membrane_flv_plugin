@@ -5,23 +5,28 @@ Mix.install([
   :membrane_h264_ffmpeg_plugin,
   :membrane_mp4_plugin,
   :membrane_file_plugin,
-  {:membrane_flv_plugin, path: ".."}
+  {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
+
 defmodule Example do
   use Membrane.Pipeline
+
+  @static_address "https://raw.githubusercontent.com/membraneframework/static/gh-pages"
+  @video_input @static_address <> "/samples/ffmpeg-testsrc.h264"
+  @audio_input @static_address <> "/samples/test-audio.aac"
+
+  @output_file "output.flv"
 
   @impl true
   def handle_init(_opts) do
     spec = %ParentSpec{
       children: [
         video_src: %Membrane.Hackney.Source{
-          location:
-            "https://raw.githubusercontent.com/membraneframework/static/gh-pages/video-samples/test-video.h264",
+          location: @video_input,
           hackney_opts: [follow_redirect: true]
         },
         audio_src: %Membrane.Hackney.Source{
-          location:
-            "https://raw.githubusercontent.com/membraneframework/static/gh-pages/samples/test-audio.aac",
+          location: @audio_input,
           hackney_opts: [follow_redirect: true]
         },
         audio_parser: %Membrane.AAC.Parser{
@@ -30,8 +35,8 @@ defmodule Example do
         },
         video_parser: %Membrane.H264.FFmpeg.Parser{attach_nalus?: true, alignment: :au, framerate: {30, 1}},
         video_payloader: Membrane.MP4.Payloader.H264,
-        muxer: %Membrane.FLV.Muxer{video_present?: false},
-        sink: %Membrane.File.Sink{location: "output.flv"}
+        muxer: Membrane.FLV.Muxer,
+        sink: %Membrane.File.Sink{location: @output_file}
       ],
       links: [
         link(:audio_src) |> to(:audio_parser) |> via_in(Pad.ref(:audio, 0)) |> to(:muxer),
@@ -42,6 +47,7 @@ defmodule Example do
     {{:ok, spec: spec}, %{}}
   end
 
+  # the rest of the Example module is only used for termination of the pipeline after processing finishes
   @impl true
   def handle_element_end_of_stream({:sink, _}, _ctx, state) do
     Pipeline.stop_and_terminate(self())
@@ -54,13 +60,14 @@ defmodule Example do
   end
 end
 
-ref =
-  Example.start_link()
-  |> elem(1)
-  |> tap(&Membrane.Pipeline.play/1)
-  |> then(&Process.monitor/1)
+# Initialize the pipeline and start it
+{:ok, pid} = Example.start_link()
+:ok = Membrane.Pipeline.play(pid)
 
+monitor_ref = Process.monitor(pid)
+
+# Wait for the pipeline to finish
 receive do
-  {:DOWN, ^ref, :process, _pid, _reason} ->
+  {:DOWN, ^monitor_ref, :process, _pid, _reason} ->
     :ok
 end

@@ -59,18 +59,18 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
-  def handle_demand(_pad, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
+  def handle_demand(_pad, _size, :buffers, ctx, state) do
+    {{:ok, maybe_demand(ctx)}, state}
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
+  def handle_process(:input, %Buffer{payload: payload}, ctx, %{header_present?: true} = state) do
     case Membrane.FLV.Parser.parse_header(state.partial <> payload) do
       {:ok, _header, rest} ->
-        {{:ok, demand: :input}, %{state | partial: rest, header_present?: false}}
+        {{:ok, maybe_demand(ctx)}, %{state | partial: rest, header_present?: false}}
 
       {:error, :not_enough_data} ->
-        {{:ok, demand: :input}, %{state | partial: state.partial <> payload}}
+        {{:ok, maybe_demand(ctx)}, %{state | partial: state.partial <> payload}}
 
       {:error, :not_a_header} ->
         raise("Invalid data detected on the input. Expected FLV header")
@@ -78,15 +78,15 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: false} = state) do
+  def handle_process(:input, %Buffer{payload: payload}, ctx, %{header_present?: false} = state) do
     case Parser.parse_body(state.partial <> payload) do
       {:ok, frames, rest} ->
         {actions, state} = get_actions(frames, state)
-        actions = Enum.concat(actions, demand: :input)
+        actions = Enum.concat(actions, maybe_demand(ctx))
         {{:ok, actions}, %{state | partial: rest}}
 
       {:error, :not_enough_data} ->
-        {{:ok, demand: :input}, %{state | partial: state.partial <> payload}}
+        {{:ok, maybe_demand(ctx)}, %{state | partial: state.partial <> payload}}
     end
   end
 
@@ -181,6 +181,11 @@ defmodule Membrane.FLV.Demuxer do
 
   defp notify_about_new_stream(packet) do
     [notify: {:new_stream, pad(packet), packet.codec}]
+  end
+
+  defp maybe_demand(ctx) do
+    should_demand? = ctx.pads |> Map.delete(:input) |> Map.values() |> Enum.all?(&(&1.demand > 0))
+    if should_demand?, do: [demand: {:input, 1}], else: [demand: {:input, 0}]
   end
 
   defp pad(%FLV.Packet{type: type, stream_id: stream_id}) when type in [:audio_config, :audio],

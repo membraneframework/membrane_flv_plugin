@@ -119,6 +119,9 @@ defmodule Membrane.FLV.Demuxer do
     Enum.reduce(frames, {[], original_state}, fn %{type: type} = packet, {actions, state} ->
       pad = pad(packet)
 
+      pts = Membrane.Time.milliseconds(packet.pts)
+      dts = Membrane.Time.milliseconds(packet.dts)
+
       cond do
         type == :audio_config and packet.codec == :AAC ->
           Membrane.Logger.debug("Audio configuration received")
@@ -127,9 +130,7 @@ defmodule Membrane.FLV.Demuxer do
         type == :audio_config ->
           [
             caps: {pad, %RemoteStream{content_format: packet.codec}},
-            buffer:
-              {pad,
-               %Buffer{pts: packet.pts, dts: packet.dts, payload: get_payload(packet, state)}}
+            buffer: {pad, %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}}
           ]
 
         type == :video_config and packet.codec == :H264 ->
@@ -143,7 +144,7 @@ defmodule Membrane.FLV.Demuxer do
             }}}
 
         true ->
-          buffer = %Buffer{pts: packet.pts, dts: packet.dts, payload: get_payload(packet, state)}
+          buffer = %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}
           {:buffer, {pad, buffer}}
       end
       |> buffer_or_send(packet, state)

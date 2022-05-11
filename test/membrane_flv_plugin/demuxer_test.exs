@@ -54,8 +54,7 @@ defmodule Membrane.FLV.Demuxer.Test do
       spec = %ParentSpec{
         children: %{
           video_parser: %Membrane.H264.FFmpeg.Parser{
-            alignment: :au,
-            framerate: {30, 1}
+            alignment: :au
           },
           video_sink: %Membrane.File.Sink{location: "/tmp/video.h264"}
         },

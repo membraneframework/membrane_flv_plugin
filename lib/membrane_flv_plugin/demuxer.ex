@@ -15,9 +15,9 @@ defmodule Membrane.FLV.Demuxer do
 
   require Membrane.Logger
 
-  alias Membrane.RemoteStream
-  alias Membrane.FLV.Parser
   alias Membrane.{Buffer, FLV}
+  alias Membrane.FLV.Parser
+  alias Membrane.RemoteStream
 
   @typedoc """
   Type of notification that is sent when a new FLV stream is detected.

@@ -10,7 +10,10 @@ defmodule Membrane.FLV.Demuxer.Test do
     def handle_init(input_file_path) do
       spec = %ParentSpec{
         children: [
-          src: %Membrane.File.Source{location: input_file_path},
+          src: %Membrane.File.Source{
+            location: input_file_path,
+            caps: %Membrane.RemoteStream{content_format: Membrane.FLV, type: :bytestream}
+          },
           demuxer: Membrane.FLV.Demuxer
         ],
         links: [
@@ -54,7 +57,8 @@ defmodule Membrane.FLV.Demuxer.Test do
       spec = %ParentSpec{
         children: %{
           video_parser: %Membrane.H264.FFmpeg.Parser{
-            alignment: :au
+            alignment: :au,
+            skip_until_parameters?: false
           },
           video_sink: %Membrane.File.Sink{location: "/tmp/video.h264"}
         },
@@ -71,16 +75,16 @@ defmodule Membrane.FLV.Demuxer.Test do
   end
 
   setup do
-    {:ok, pid} =
-      Pipeline.start_link(%Pipeline.Options{
-        module: Support.Pipeline,
-        custom_args: "test/fixtures/reference.flv"
-      })
+    assert {:ok, pid} =
+             Pipeline.start(
+               module: Support.Pipeline,
+               custom_args: "test/fixtures/reference.flv"
+             )
 
-    :ok = Pipeline.play(pid)
+    Pipeline.execute_actions(pid, playback: :playing)
 
     on_exit(fn ->
-      Pipeline.stop_and_terminate(pid, blocking?: true)
+      Pipeline.terminate(pid, blocking?: true)
       File.rm!("/tmp/audio.aac")
       File.rm!("/tmp/video.h264")
     end)

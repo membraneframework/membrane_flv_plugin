@@ -64,6 +64,9 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
+  def handle_caps(_pad, _caps, _context, state), do: {:ok, state}
+
+  @impl true
   def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
     case Membrane.FLV.Parser.parse_header(state.partial <> payload) do
       {:ok, _header, rest} ->

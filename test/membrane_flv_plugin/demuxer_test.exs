@@ -12,7 +12,7 @@ defmodule Membrane.FLV.Demuxer.Test do
         children: [
           src: %Membrane.File.Source{
             location: input_file_path,
-            caps: %Membrane.RemoteStream{content_format: Membrane.FLV, type: :bytestream}
+            content_format: Membrane.FLV
           },
           demuxer: Membrane.FLV.Demuxer
         ],

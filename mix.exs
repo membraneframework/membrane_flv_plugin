@@ -44,7 +44,7 @@ defmodule Membrane.FLV.Mixfile do
       # {:membrane_file_plugin, "~> 0.12", only: :test},
       {:membrane_file_plugin,
        github: "membraneframework/membrane_file_plugin",
-       branch: "sink_content_type",
+       branch: "source-option-content-format",
        only: :test,
        override: true},
       {:membrane_h264_ffmpeg_plugin, "~> 0.20.0", only: :test},

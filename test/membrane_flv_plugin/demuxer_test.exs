@@ -11,8 +11,7 @@ defmodule Membrane.FLV.Demuxer.Test do
       spec = %ParentSpec{
         children: [
           src: %Membrane.File.Source{
-            location: input_file_path,
-            content_format: Membrane.FLV
+            location: input_file_path
           },
           demuxer: Membrane.FLV.Demuxer
         ],

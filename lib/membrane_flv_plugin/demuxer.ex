@@ -34,7 +34,10 @@ defmodule Membrane.FLV.Demuxer do
 
   def_input_pad :input,
     availability: :always,
-    caps: {RemoteStream, content_format: FLV, type: :bytestream},
+    caps: [
+      {RemoteStream, content_format: FLV, type: :bytestream},
+      {RemoteStream, content_format: nil, type: :bytestream}
+    ],
     mode: :pull,
     demand_unit: :buffers
 

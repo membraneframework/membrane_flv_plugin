@@ -111,9 +111,6 @@ defmodule Membrane.FLV.Muxer do
       pts: timestamp,
       dts: timestamp
     }
-    |> then(fn packet ->
-      packet
-    end)
     |> prepare_to_send(state)
     |> then(fn {actions, state} -> {{:ok, actions}, state} end)
   end

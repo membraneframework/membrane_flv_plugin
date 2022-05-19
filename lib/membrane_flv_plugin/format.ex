@@ -3,23 +3,6 @@ defmodule Membrane.FLV do
   Format utilities and internal struct definitions for Membrane FLV Plugin
   """
 
-  @sound_format BiMap.new(%{
-                  0 => :pcm,
-                  1 => :adpcm,
-                  2 => :MP3,
-                  # PCM little endian
-                  3 => :pcmle,
-                  4 => :nellymoser_16k_mono,
-                  5 => :nellymoser_8k_mono,
-                  6 => :nellymoser,
-                  7 => :g711_a_law,
-                  8 => :g711_mu_law,
-                  10 => :AAC,
-                  11 => :Speex,
-                  14 => :MP3_8k,
-                  15 => :device_specific
-                })
-
   @typedoc """
   List of audio codecs supported by the FLV format.
   """
@@ -38,15 +21,6 @@ defmodule Membrane.FLV do
           | :MP3_8k
           | :device_specific
 
-  @video_codec BiMap.new(%{
-                 2 => :sorenson_h263,
-                 3 => :screen_video,
-                 4 => :vp6,
-                 5 => :vp6_with_alpha,
-                 6 => :screen_video_2,
-                 7 => :H264
-               })
-
   @typedoc """
   List of video codecs supported by the FLV format.
   """
@@ -54,16 +28,56 @@ defmodule Membrane.FLV do
           :sorenson_h263 | :screen_video | :vp6 | :vp6_with_alpha | :screen_video_2 | :H264
 
   @spec index_to_sound_format(non_neg_integer()) :: audio_codec_t()
-  def index_to_sound_format(index), do: BiMap.fetch!(@sound_format, index)
+  def index_to_sound_format(0), do: :pcm
+  def index_to_sound_format(1), do: :adpcm
+  def index_to_sound_format(2), do: :MP3
+  def index_to_sound_format(3), do: :pcmle
+  def index_to_sound_format(4), do: :nellymoser_16k_mono
+  def index_to_sound_format(5), do: :nellymoser_8k_mono
+  def index_to_sound_format(6), do: :nellymoser
+  def index_to_sound_format(7), do: :g711_a_law
+  def index_to_sound_format(8), do: :g711_mu_law
+  def index_to_sound_format(10), do: :AAC
+  def index_to_sound_format(11), do: :Speex
+  def index_to_sound_format(14), do: :MP3_8k
+  def index_to_sound_format(15), do: :device_specific
+  def index_to_sound_format(index), do: raise("Unknown audio index #{inspect(index)}")
 
   @spec sound_format_to_index(audio_codec_t()) :: non_neg_integer()
-  def sound_format_to_index(format), do: BiMap.fetch_key!(@sound_format, format)
+  def sound_format_to_index(:pcm), do: 0
+  def sound_format_to_index(:adpcm), do: 1
+  def sound_format_to_index(:MP3), do: 2
+  def sound_format_to_index(:pcmle), do: 3
+  def sound_format_to_index(:nellymoser_16k_mono), do: 4
+  def sound_format_to_index(:nellymoser_8k_mono), do: 5
+  def sound_format_to_index(:nellymoser), do: 6
+  def sound_format_to_index(:g711_a_law), do: 7
+  def sound_format_to_index(:g711_mu_law), do: 8
+  def sound_format_to_index(:AAC), do: 10
+  def sound_format_to_index(:Speex), do: 11
+  def sound_format_to_index(:MP3_8k), do: 14
+  def sound_format_to_index(:device_specific), do: 15
+
+  def sound_format_to_index(sound_format),
+    do: raise("Unknown sound format #{inspect(sound_format)}")
 
   @spec index_to_video_codec(non_neg_integer()) :: video_codec_t()
-  def index_to_video_codec(index), do: BiMap.fetch!(@video_codec, index)
+  def index_to_video_codec(2), do: :sorenson_h263
+  def index_to_video_codec(3), do: :screen_video
+  def index_to_video_codec(4), do: :vp6
+  def index_to_video_codec(5), do: :vp6_with_alpha
+  def index_to_video_codec(6), do: :screen_video_2
+  def index_to_video_codec(7), do: :H264
+  def index_to_video_codec(index), do: raise("Unknown video index #{inspect(index)}")
 
   @spec video_codec_to_index(video_codec_t()) :: non_neg_integer()
-  def video_codec_to_index(codec), do: BiMap.fetch_key!(@video_codec, codec)
+  def video_codec_to_index(:sorenson_h263), do: 2
+  def video_codec_to_index(:screen_video), do: 3
+  def video_codec_to_index(:vp6), do: 4
+  def video_codec_to_index(:vp6_with_alpha), do: 5
+  def video_codec_to_index(:screen_video_2), do: 6
+  def video_codec_to_index(:H264), do: 7
+  def video_codec_to_index(video_codec), do: raise("Unknown video codec #{inspect(video_codec)}")
 
   defmodule Header do
     @moduledoc false

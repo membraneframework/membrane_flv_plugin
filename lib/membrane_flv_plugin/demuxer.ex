@@ -15,9 +15,9 @@ defmodule Membrane.FLV.Demuxer do
 
   require Membrane.Logger
 
-  alias Membrane.RemoteStream
-  alias Membrane.FLV.Parser
   alias Membrane.{Buffer, FLV}
+  alias Membrane.FLV.Parser
+  alias Membrane.RemoteStream
 
   @typedoc """
   Type of notification that is sent when a new FLV stream is detected.
@@ -34,7 +34,8 @@ defmodule Membrane.FLV.Demuxer do
 
   def_input_pad :input,
     availability: :always,
-    caps: {RemoteStream, content_format: FLV, type: :bytestream},
+    caps:
+      {RemoteStream, content_format: Membrane.Caps.Matcher.one_of([nil, FLV]), type: :bytestream},
     mode: :pull,
     demand_unit: :buffers
 
@@ -62,6 +63,9 @@ defmodule Membrane.FLV.Demuxer do
   def handle_demand(_pad, size, :buffers, _ctx, state) do
     {{:ok, demand: {:input, size}}, state}
   end
+
+  @impl true
+  def handle_caps(_pad, _caps, _context, state), do: {:ok, state}
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
@@ -119,6 +123,9 @@ defmodule Membrane.FLV.Demuxer do
     Enum.reduce(frames, {[], original_state}, fn %{type: type} = packet, {actions, state} ->
       pad = pad(packet)
 
+      pts = Membrane.Time.milliseconds(packet.pts)
+      dts = Membrane.Time.milliseconds(packet.dts)
+
       cond do
         type == :audio_config and packet.codec == :AAC ->
           Membrane.Logger.debug("Audio configuration received")
@@ -127,9 +134,7 @@ defmodule Membrane.FLV.Demuxer do
         type == :audio_config ->
           [
             caps: {pad, %RemoteStream{content_format: packet.codec}},
-            buffer:
-              {pad,
-               %Buffer{pts: packet.pts, dts: packet.dts, payload: get_payload(packet, state)}}
+            buffer: {pad, %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}}
           ]
 
         type == :video_config and packet.codec == :H264 ->
@@ -143,7 +148,7 @@ defmodule Membrane.FLV.Demuxer do
             }}}
 
         true ->
-          buffer = %Buffer{pts: packet.pts, dts: packet.dts, payload: get_payload(packet, state)}
+          buffer = %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}
           {:buffer, {pad, buffer}}
       end
       |> buffer_or_send(packet, state)

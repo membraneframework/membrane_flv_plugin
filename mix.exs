@@ -12,6 +12,7 @@ defmodule Membrane.FLV.Mixfile do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      dialyzer: dialyzer(),
 
       # hex
       description: "FLV Container implementation for Membrane Framework",
@@ -36,20 +37,33 @@ defmodule Membrane.FLV.Mixfile do
 
   defp deps do
     [
-      {:membrane_core, "~> 0.8"},
-      {:membrane_aac_format, "~> 0.6.0"},
-      {:membrane_mp4_format, "~> 0.4.0"},
+      {:membrane_core, "~> 0.10.0"},
+      {:membrane_aac_format, "~> 0.7.0"},
+      {:membrane_mp4_format, "~> 0.7.0"},
       {:membrane_h264_format, "~> 0.3.0"},
-      {:membrane_file_plugin, "~> 0.7", only: :test},
-      {:membrane_h264_ffmpeg_plugin, "~> 0.16.0", only: :test},
-      {:membrane_aac_plugin, "~> 0.11.0", only: :test},
-      {:membrane_mp4_plugin, "~> 0.10.0", only: :test},
-      {:ex_doc, "~> 0.24", only: :dev, runtime: false},
-      {:credo, "~> 1.5", runtime: false},
+      {:membrane_file_plugin, "~> 0.12", only: :test},
+      {:membrane_h264_ffmpeg_plugin, "~> 0.20.0", only: :test},
+      {:membrane_aac_plugin, "~> 0.12.1", only: :test},
+      {:membrane_mp4_plugin, "~> 0.14.0", only: :test},
       {:bimap, "~> 1.2"},
       {:bunch, "~> 1.3"},
-      {:dialyxir, "~> 1.0", runtime: false, only: :dev}
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
+      {:dialyxir, ">= 0.0.0", only: :dev, runtime: false},
+      {:credo, ">= 0.0.0", only: :dev, runtime: false}
     ]
+  end
+
+  defp dialyzer() do
+    opts = [
+      flags: [:error_handling]
+    ]
+
+    if System.get_env("CI") == "true" do
+      # Store PLTs in cacheable directory for CI
+      [plt_local_path: "priv/plts", plt_core_path: "priv/plts"] ++ opts
+    else
+      opts
+    end
   end
 
   defp package do
@@ -67,6 +81,7 @@ defmodule Membrane.FLV.Mixfile do
     [
       main: "readme",
       extras: ["README.md", "LICENSE"],
+      formatters: ["html"],
       source_ref: "v#{@version}",
       nest_modules_by_prefix: [Membrane.FLV]
     ]

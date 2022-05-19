@@ -2,8 +2,8 @@ defmodule Membrane.FLV.Serializer do
   @moduledoc false
 
   require Membrane.FLV.Packet
-  alias Membrane.FLV.{Header, Packet}
   alias Membrane.AAC
+  alias Membrane.FLV.{Header, Packet}
 
   @type previous_tag_size() :: non_neg_integer()
 

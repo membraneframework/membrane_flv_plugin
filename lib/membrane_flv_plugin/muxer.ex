@@ -10,7 +10,7 @@ defmodule Membrane.FLV.Muxer do
   - `Pad.ref(:video, 0)`
   """
   use Membrane.Filter
-  alias Membrane.{AAC, FLV, Buffer}
+  alias Membrane.{AAC, Buffer, FLV}
   alias Membrane.FLV.{Header, Packet, Serializer}
 
   def_input_pad :audio,
@@ -166,7 +166,12 @@ defmodule Membrane.FLV.Muxer do
 
   defp prepare_to_send(segment, state) do
     {tag, previous_tag_size} = Serializer.serialize(segment, state.previous_tag_size)
-    actions = [buffer: {:output, %Buffer{payload: tag}}]
+
+    actions = [
+      caps: {:output, %Membrane.RemoteStream{content_format: FLV}},
+      buffer: {:output, %Buffer{payload: tag}}
+    ]
+
     state = Map.put(state, :previous_tag_size, previous_tag_size)
     {actions, state}
   end

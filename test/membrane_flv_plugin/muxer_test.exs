@@ -6,16 +6,16 @@ defmodule Membrane.FLV.Muxer.Test do
 
   require Membrane.Pad
 
-  alias Membrane.Testing.Pipeline
   alias Membrane.Pad
+  alias Membrane.Testing.Pipeline
 
   @output "/tmp/output.flv"
   @reference "test/fixtures/reference.flv"
 
   setup do
     {:ok, pid} =
-      %Pipeline.Options{
-        elements: [
+      [
+        children: [
           video_src: %Membrane.File.Source{location: "test/fixtures/input.h264"},
           audio_src: %Membrane.File.Source{location: "test/fixtures/input.aac"},
           audio_parser: %Membrane.AAC.Parser{
@@ -40,11 +40,11 @@ defmodule Membrane.FLV.Muxer.Test do
           |> to(:muxer),
           link(:muxer) |> to(:sink)
         ]
-      }
+      ]
       |> Pipeline.start_link()
 
-    :ok = Pipeline.play(pid)
-    on_exit(fn -> Pipeline.stop_and_terminate(pid, blocking?: true) end)
+    Pipeline.execute_actions(pid, playback: :playing)
+    on_exit(fn -> Pipeline.terminate(pid, blocking?: true) end)
     %{pid: pid}
   end
 

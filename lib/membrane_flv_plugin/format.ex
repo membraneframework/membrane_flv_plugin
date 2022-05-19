@@ -41,7 +41,7 @@ defmodule Membrane.FLV do
   def index_to_sound_format(11), do: :Speex
   def index_to_sound_format(14), do: :MP3_8k
   def index_to_sound_format(15), do: :device_specific
-  def index_to_sound_format(_index), do: {:error, "Unknown audio index"}
+  def index_to_sound_format(index), do: raise("Unknown audio index #{inspect(index)}")
 
   @spec sound_format_to_index(audio_codec_t()) :: non_neg_integer()
   def sound_format_to_index(:pcm), do: 0
@@ -57,7 +57,9 @@ defmodule Membrane.FLV do
   def sound_format_to_index(:Speex), do: 11
   def sound_format_to_index(:MP3_8k), do: 14
   def sound_format_to_index(:device_specific), do: 15
-  def sound_format_to_index(_sound_format), do: {:error, "Unknown sound format"}
+
+  def sound_format_to_index(sound_format),
+    do: raise("Unknown sound format #{inspect(sound_format)}")
 
   @spec index_to_video_codec(non_neg_integer()) :: video_codec_t()
   def index_to_video_codec(2), do: :sorenson_h263
@@ -66,7 +68,7 @@ defmodule Membrane.FLV do
   def index_to_video_codec(5), do: :vp6_with_alpha
   def index_to_video_codec(6), do: :screen_video_2
   def index_to_video_codec(7), do: :H264
-  def index_to_video_codec(_index), do: {:error, "Unknown video index"}
+  def index_to_video_codec(index), do: raise("Unknown video index #{inspect(index)}")
 
   @spec video_codec_to_index(video_codec_t()) :: non_neg_integer()
   def video_codec_to_index(:sorenson_h263), do: 2
@@ -75,7 +77,7 @@ defmodule Membrane.FLV do
   def video_codec_to_index(:vp6_with_alpha), do: 5
   def video_codec_to_index(:screen_video_2), do: 6
   def video_codec_to_index(:H264), do: 7
-  def video_codec_to_index(_video_codec), do: {:error, "Unknown video codec"}
+  def video_codec_to_index(video_codec), do: raise("Unknown video codec #{inspect(video_codec)}")
 
   defmodule Header do
     @moduledoc false

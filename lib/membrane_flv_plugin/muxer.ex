@@ -147,7 +147,7 @@ defmodule Membrane.FLV.Muxer do
     state = Map.update!(state, :last_dts, &Map.delete(&1, pad))
 
     if Enum.any?(ctx.pads, &match?({_, %{direction: :input, end_of_stream?: false}}, &1)) do
-      {:ok, state}
+      {{:ok, redemand: :output}, state}
     else
       last = <<state.previous_tag_size::32>>
       {{:ok, buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output}, state}

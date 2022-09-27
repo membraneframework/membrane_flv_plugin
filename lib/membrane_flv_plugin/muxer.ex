@@ -63,6 +63,7 @@ defmodule Membrane.FLV.Muxer do
       }
       |> prepare_to_send(state)
 
+    actions = Keyword.put(actions, :caps, {:output, %Membrane.RemoteStream{content_format: FLV}})
     {{:ok, actions}, state}
   end
 
@@ -167,12 +168,9 @@ defmodule Membrane.FLV.Muxer do
   defp prepare_to_send(segment, state) do
     {tag, previous_tag_size} = Serializer.serialize(segment, state.previous_tag_size)
 
-    actions = [
-      caps: {:output, %Membrane.RemoteStream{content_format: FLV}},
-      buffer: {:output, %Buffer{payload: tag}}
-    ]
-
+    actions = [buffer: {:output, %Buffer{payload: tag}}]
     state = Map.put(state, :previous_tag_size, previous_tag_size)
+
     {actions, state}
   end
 

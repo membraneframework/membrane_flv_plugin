@@ -143,7 +143,7 @@ defmodule Membrane.FLV.Parser do
   defp resolve_type(18), do: :script_data
 
   defp parse_timestamp(timestamp, timestamp_extended) do
-    use Bitwise
+    import Bitwise
     (timestamp_extended <<< 24) + timestamp
   end
 end

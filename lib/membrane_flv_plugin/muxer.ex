@@ -80,7 +80,7 @@ defmodule Membrane.FLV.Muxer do
       do: raise("Caps must be sent before sending a packet")
 
     dts = get_timestamp(buffer.dts || buffer.pts)
-    pts = get_timestamp(buffer.pts || dts)
+    pts = get_timestamp(buffer.pts) || dts
     state = put_in(state, [:last_dts, pad], dts)
 
     {actions, state} =

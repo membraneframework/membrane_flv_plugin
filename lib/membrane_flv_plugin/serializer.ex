@@ -35,6 +35,7 @@ defmodule Membrane.FLV.Serializer do
   defp tag(%Packet{} = packet) do
     tag_header = tag_header(packet)
     data_size = byte_size(tag_header) + byte_size(packet.payload)
+    {timestamp, timestamp_extended} = split_timestamp(packet.dts)
 
     <<
       0::2,
@@ -42,8 +43,8 @@ defmodule Membrane.FLV.Serializer do
       0::1,
       tag_type(packet)::5,
       data_size::24,
-      packet.dts::24,
-      0::8,
+      timestamp::24,
+      timestamp_extended::8,
       packet.stream_id::24,
       tag_header::binary,
       packet.payload::binary
@@ -122,5 +123,10 @@ defmodule Membrane.FLV.Serializer do
       0::1,
       0::1
     >>
+  end
+
+  defp split_timestamp(ts) do
+    import Bitwise
+    {ts &&& 0xFFFFFF, ts >>> 24}
   end
 end

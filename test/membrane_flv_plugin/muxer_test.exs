@@ -49,7 +49,7 @@ defmodule Membrane.FLV.Muxer.Test do
   end
 
   test "integration test", %{pid: pid} do
-    assert_end_of_stream(pid, :sink, :input, 50_000)
+    assert_end_of_stream(pid, :sink, :input)
 
     result = File.read!(@output) |> prepare()
     reference = File.read!(@reference) |> prepare()

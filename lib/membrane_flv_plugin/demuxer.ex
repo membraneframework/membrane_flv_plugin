@@ -148,7 +148,13 @@ defmodule Membrane.FLV.Demuxer do
             }}}
 
         true ->
-          buffer = %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}
+          buffer = %Buffer{
+            pts: pts,
+            dts: dts,
+            metadata: get_metadata(packet),
+            payload: get_payload(packet, state)
+          }
+
           {:buffer, {pad, buffer}}
       end
       |> buffer_or_send(packet, state)
@@ -170,8 +176,8 @@ defmodule Membrane.FLV.Demuxer do
       match?(%{^pad => :connected}, state.pads_buffer) ->
         {Bunch.listify(action), state}
 
-      Map.has_key?(state.pads_buffer, pad(packet)) ->
-        state = update_in(state, [:pads_buffer, pad(packet)], &Qex.push(&1, action))
+      Map.has_key?(state.pads_buffer, pad) ->
+        state = update_in(state, [:pads_buffer, pad], &Qex.push(&1, action))
         {[], state}
 
       true ->
@@ -189,6 +195,11 @@ defmodule Membrane.FLV.Demuxer do
   defp notify_about_new_stream(packet) do
     [notify: {:new_stream, pad(packet), packet.codec}]
   end
+
+  defp get_metadata(%FLV.Packet{type: :video, codec_params: %{key_frame?: key_frame?}}),
+    do: %{key_frame?: key_frame?}
+
+  defp get_metadata(_packet), do: %{}
 
   defp pad(%FLV.Packet{type: type, stream_id: stream_id}) when type in [:audio_config, :audio],
     do: Pad.ref(:audio, stream_id)

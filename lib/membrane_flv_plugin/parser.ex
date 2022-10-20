@@ -122,15 +122,19 @@ defmodule Membrane.FLV.Parser do
   end
 
   # AVC H264
+  @keyframe_frame_type 1
   defp parse_payload(:video, <<
-         _frame_type::4,
+         frame_type::4,
          7::4,
          packet_type::8,
          composition_time::24,
          payload::binary
        >>) do
     type = if packet_type == 0, do: :video_config, else: :video
-    {type, :H264, %{composition_time: composition_time}, payload}
+
+    {type, :H264,
+     %{composition_time: composition_time, key_frame?: frame_type == @keyframe_frame_type},
+     payload}
   end
 
   defp parse_payload(:video, <<_frame_type::4, codec::4, _rest::binary>>) do

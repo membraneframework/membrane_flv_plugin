@@ -1,10 +1,9 @@
 Mix.install([
-  :membrane_core,
-  :membrane_hackney_plugin,
-  :membrane_aac_plugin,
-  :membrane_h264_ffmpeg_plugin,
-  :membrane_mp4_plugin,
-  :membrane_file_plugin,
+  {:membrane_hackney_plugin, "~> 0.9.0"},
+  {:membrane_aac_plugin, "~> 0.13.0"},
+  {:membrane_h264_ffmpeg_plugin, "~> 0.25.0"},
+  {:membrane_mp4_plugin, github: "membraneframework/membrane_mp4_plugin", branch: "core-0.11"},
+  {:membrane_file_plugin, "~> 0.13.2"},
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
 
@@ -18,56 +17,58 @@ defmodule Example do
   @output_file "output.flv"
 
   @impl true
-  def handle_init(_opts) do
-    spec = %ParentSpec{
-      children: [
-        video_src: %Membrane.Hackney.Source{
-          location: @video_input,
-          hackney_opts: [follow_redirect: true]
-        },
-        audio_src: %Membrane.Hackney.Source{
-          location: @audio_input,
-          hackney_opts: [follow_redirect: true]
-        },
-        audio_parser: %Membrane.AAC.Parser{
-          in_encapsulation: :ADTS,
-          out_encapsulation: :none
-        },
-        video_parser: %Membrane.H264.FFmpeg.Parser{attach_nalus?: true, alignment: :au, framerate: {30, 1}},
-        video_payloader: Membrane.MP4.Payloader.H264,
-        muxer: Membrane.FLV.Muxer,
-        sink: %Membrane.File.Sink{location: @output_file}
-      ],
-      links: [
-        link(:audio_src) |> to(:audio_parser) |> via_in(Pad.ref(:audio, 0)) |> to(:muxer),
-        link(:video_src) |> to(:video_parser) |> to(:video_payloader) |> via_in(Pad.ref(:video, 0)) |> to(:muxer),
-        link(:muxer) |> to(:sink)
-      ]
-    }
-    {{:ok, spec: spec}, %{}}
+  def handle_init(_ctx, _opts) do
+    structure = [
+      child(:muxer, Membrane.FLV.Muxer)
+      |> child(:sink, %Membrane.File.Sink{location: @output_file}),
+      # setup input audio stream
+      child({:source, :audio}, %Membrane.Hackney.Source{
+        location: @audio_input,
+        hackney_opts: [follow_redirect: true]
+      })
+      |> child({:parser, :audio}, %Membrane.AAC.Parser{
+        in_encapsulation: :ADTS,
+        out_encapsulation: :none
+      })
+      |> via_in(Pad.ref(:audio, 0))
+      |> get_child(:muxer),
+      # setup input video stream
+      child({:source, :video}, %Membrane.Hackney.Source{
+        location: @video_input,
+        hackney_opts: [follow_redirect: true]
+      })
+      |> child({:parser, :video}, %Membrane.H264.FFmpeg.Parser{
+        attach_nalus?: true,
+        alignment: :au,
+        framerate: {30, 1}
+      })
+      |> child({:payloader, :video}, Membrane.MP4.Payloader.H264)
+      |> via_in(Pad.ref(:video, 0))
+      |> get_child(:muxer)
+    ]
+
+    {[spec: structure, playback: :playing], %{}}
   end
 
   # the rest of the Example module is only used for termination of the pipeline after processing finishes
   @impl true
-  def handle_element_end_of_stream({:sink, _}, _ctx, state) do
-    Pipeline.stop_and_terminate(self())
-    {:ok, state}
+  def handle_element_end_of_stream(:sink, _pad, _ctx, state) do
+    {[terminate: :shutdown], state}
   end
 
   @impl true
-  def handle_element_end_of_stream(_, _context, state) do
-    {:ok, state}
+  def handle_element_end_of_stream(_child, _pad, _ctx, state) do
+    {[], state}
   end
 end
 
 # Initialize the pipeline and start it
-{:ok, pid} = Example.start_link()
-:ok = Membrane.Pipeline.play(pid)
+{:ok, _supervisor_pid, pipeline_pid} = Example.start_link()
 
-monitor_ref = Process.monitor(pid)
+monitor_ref = Process.monitor(pipeline_pid)
 
 # Wait for the pipeline to finish
 receive do
-  {:DOWN, ^monitor_ref, :process, _pid, _reason} ->
+  {:DOWN, ^monitor_ref, :process, _pipeline_pid, _reason} ->
     :ok
 end

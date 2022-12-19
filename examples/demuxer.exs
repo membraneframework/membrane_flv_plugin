@@ -1,10 +1,8 @@
-
 Mix.install([
-  :membrane_core,
-  {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()},
-  :membrane_file_plugin,
-  :membrane_aac_plugin,
-  :membrane_h264_ffmpeg_plugin
+  {:membrane_aac_plugin, "~> 0.13.0"},
+  {:membrane_h264_ffmpeg_plugin, "~> 0.25.0"},
+  {:membrane_file_plugin, "~> 0.13.2"},
+  {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
 
 defmodule Example do
@@ -13,52 +11,53 @@ defmodule Example do
   @input_file __DIR__ |> Path.join("../test/fixtures/reference.flv") |> Path.expand()
 
   @impl true
-  def handle_init(_opts) do
-    spec = %ParentSpec{
-      children: [
-        src: %Membrane.File.Source{location: @input_file},
-        demuxer: Membrane.FLV.Demuxer,
-        video_sink: %Membrane.File.Sink{location: "video.h264"},
-        audio_sink: %Membrane.File.Sink{location: "audio.aac"},
-        audio_parser: %Membrane.AAC.Parser{
-          in_encapsulation: :none,
-          out_encapsulation: :ADTS
-        },
-        video_parser: %Membrane.H264.FFmpeg.Parser{
-          framerate: {30, 1},
-        }
-      ],
-      links: [
-        link(:src) |> to(:demuxer),
-        link(:demuxer) |> via_out(Pad.ref(:audio, 0)) |> to(:audio_parser) |> to(:audio_sink),
-        link(:demuxer) |> via_out(Pad.ref(:video, 0)) |> to(:video_parser) |> to(:video_sink)
-      ]
-    }
+  def handle_init(_ctx, _opts) do
+    structure = [
+      child(:source, %Membrane.File.Source{location: @input_file})
+      |> child(:demuxer, Membrane.FLV.Demuxer),
+      # setup output audio stream
+      get_child(:demuxer)
+      |> via_out(Pad.ref(:audio, 0))
+      |> child({:parser, :audio}, %Membrane.AAC.Parser{
+        in_encapsulation: :none,
+        out_encapsulation: :ADTS
+      })
+      |> child({:sink, :audio}, %Membrane.File.Sink{location: "audio.aac"}),
+      # setup output video stream
+      get_child(:demuxer)
+      |> via_out(Pad.ref(:video, 0))
+      |> child({:parser, :video}, %Membrane.H264.FFmpeg.Parser{
+        framerate: {30, 1}
+      })
+      |> child({:sink, :video}, %Membrane.File.Sink{location: "video.h264"})
+    ]
 
-    {{:ok, spec: spec}, %{eos_counter: 0}}
+    {[spec: structure, playback: :playing], %{eos_left: 2}}
   end
 
   # the rest of the Example module is only used for termination of the pipeline after processing finishes
   @impl true
-  def handle_element_end_of_stream({sink, _pad}, _ctx, state) when sink in [:audio_sink, :video_sink] do
-    if state.eos_counter == 1 do
-      __MODULE__.stop_and_terminate(self())
+  def handle_element_end_of_stream({:sink, _type}, _pad, _ctx, state) do
+    state = Map.update!(state, :eos_left, &(&1 - 1))
+
+    if state.eos_left == 0 do
+      {[terminate: :shutdown], state}
+    else
+      {[], state}
     end
-    {:ok, Map.update!(state, :eos_counter, & &1 + 1)}
   end
 
   @impl true
-  def handle_element_end_of_stream(_element, _ctx, state), do: {:ok, state}
+  def handle_element_end_of_stream(_element, _pad, _ctx, state), do: {[], state}
 end
 
 # Initialize the pipeline and start it
-{:ok, pid} = Example.start_link()
-:ok = Membrane.Pipeline.play(pid)
+{:ok, _supervisor_pid, pipeline_pid} = Example.start_link()
 
-monitor_ref = Process.monitor(pid)
+monitor_ref = Process.monitor(pipeline_pid)
 
 # Wait for the pipeline to finish
 receive do
-  {:DOWN, ^monitor_ref, :process, _pid, _reason} ->
+  {:DOWN, ^monitor_ref, :process, _pipeline_pid, _reason} ->
     :ok
 end

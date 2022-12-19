@@ -10,29 +10,30 @@ defmodule Membrane.FLV.Muxer do
   - `Pad.ref(:video, 0)`
   """
   use Membrane.Filter
+
   alias Membrane.{AAC, Buffer, FLV, RemoteStream}
   alias Membrane.FLV.{Header, Packet, Serializer}
 
   def_input_pad :audio,
     availability: :on_request,
-    caps: {AAC, encapsulation: :none},
+    accepted_format: %AAC{encapsulation: :none},
     mode: :pull,
     demand_unit: :buffers
 
   def_input_pad :video,
     availability: :on_request,
-    caps: Membrane.MP4.Payload,
+    accepted_format: Membrane.MP4.Payload,
     mode: :pull,
     demand_unit: :buffers
 
   def_output_pad :output,
     availability: :always,
-    caps: {Membrane.RemoteStream, content_format: FLV},
+    accepted_format: %Membrane.RemoteStream{content_format: FLV},
     mode: :pull
 
   @impl true
-  def handle_init(_opts) do
-    {:ok,
+  def handle_init(_ctx, _opts) do
+    {[],
      %{
        previous_tag_size: 0,
        last_dts: %{},
@@ -51,11 +52,11 @@ defmodule Membrane.FLV.Muxer do
   @impl true
   def handle_pad_added(Pad.ref(_type, 0) = pad, _ctx, state) do
     state = put_in(state, [:last_dts, pad], 0)
-    {:ok, state}
+    {[], state}
   end
 
   @impl true
-  def handle_prepared_to_playing(ctx, state) do
+  def handle_playing(ctx, state) do
     {actions, state} =
       %Header{
         audio_present?: has_stream?(:audio, ctx),
@@ -63,7 +64,7 @@ defmodule Membrane.FLV.Muxer do
       }
       |> prepare_to_send(state)
 
-    {{:ok, [caps: {:output, %RemoteStream{content_format: FLV}}] ++ actions}, state}
+    {[stream_format: {:output, %RemoteStream{content_format: FLV}}] ++ actions, state}
   end
 
   @impl true
@@ -71,13 +72,13 @@ defmodule Membrane.FLV.Muxer do
     # We will request one buffer from the stream that has the lowest timestamp
     # This will ensure that the output stream has reasonable audio / video balance
     {pad, _dts} = Enum.min_by(state.last_dts, &Bunch.value/1)
-    {{:ok, [demand: {pad, 1}]}, state}
+    {[demand: {pad, 1}], state}
   end
 
   @impl true
   def handle_process(Pad.ref(type, stream_id) = pad, buffer, ctx, state) do
-    if ctx.pads[pad].caps == nil,
-      do: raise("Caps must be sent before sending a packet")
+    if ctx.pads[pad].stream_format == nil,
+      do: raise("stream_format must be sent before sending a packet")
 
     dts = get_timestamp(buffer.dts || buffer.pts)
     pts = get_timestamp(buffer.pts) || dts
@@ -96,29 +97,28 @@ defmodule Membrane.FLV.Muxer do
       }
       |> prepare_to_send(state)
 
-    {{:ok, actions ++ [redemand: :output]}, state}
+    {actions ++ [redemand: :output], state}
   end
 
   @impl true
-  def handle_caps(Pad.ref(:audio, stream_id) = pad, %AAC{} = caps, _ctx, state) do
+  def handle_stream_format(Pad.ref(:audio, stream_id) = pad, %AAC{} = stream_format, _ctx, state) do
     timestamp = Map.get(state.last_dts, pad, 0) |> get_timestamp()
 
     %Packet{
       type: :audio_config,
       stream_id: stream_id,
-      payload: Serializer.aac_to_audio_specific_config(caps),
+      payload: Serializer.aac_to_audio_specific_config(stream_format),
       codec: codec(:audio),
       pts: timestamp,
       dts: timestamp
     }
     |> prepare_to_send(state)
-    |> then(fn {actions, state} -> {{:ok, actions}, state} end)
   end
 
   @impl true
-  def handle_caps(
+  def handle_stream_format(
         Pad.ref(:video, stream_id) = pad,
-        %Membrane.MP4.Payload{content: %Membrane.MP4.Payload.AVC1{avcc: config}} = _caps,
+        %Membrane.MP4.Payload{content: %Membrane.MP4.Payload.AVC1{avcc: config}} = _stream_format,
         _ctx,
         state
       ) do
@@ -133,12 +133,14 @@ defmodule Membrane.FLV.Muxer do
       dts: timestamp
     }
     |> prepare_to_send(state)
-    |> then(fn {actions, state} -> {{:ok, actions}, state} end)
   end
 
   @impl true
-  def handle_caps(Pad.ref(type, _id) = _pad, caps, _ctx, _state),
-    do: raise("Caps `#{inspect(caps)}` are not supported for stream type #{inspect(type)}")
+  def handle_stream_format(Pad.ref(type, _id) = _pad, stream_format, _ctx, _state),
+    do:
+      raise(
+        "stream_format `#{inspect(stream_format)}` are not supported for stream type #{inspect(type)}"
+      )
 
   @impl true
   def handle_end_of_stream(pad, ctx, state) do
@@ -146,10 +148,10 @@ defmodule Membrane.FLV.Muxer do
     state = Map.update!(state, :last_dts, &Map.delete(&1, pad))
 
     if Enum.any?(ctx.pads, &match?({_, %{direction: :input, end_of_stream?: false}}, &1)) do
-      {{:ok, redemand: :output}, state}
+      {[redemand: :output], state}
     else
       last = <<state.previous_tag_size::32>>
-      {{:ok, buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output}, state}
+      {[buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output], state}
     end
   end
 

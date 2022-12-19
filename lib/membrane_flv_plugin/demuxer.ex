@@ -34,47 +34,48 @@ defmodule Membrane.FLV.Demuxer do
 
   def_input_pad :input,
     availability: :always,
-    caps:
-      {RemoteStream, content_format: Membrane.Caps.Matcher.one_of([nil, FLV]), type: :bytestream},
+    accepted_format:
+      %RemoteStream{content_format: content_format, type: :bytestream}
+      when content_format in [nil, FLV],
     mode: :pull,
     demand_unit: :buffers
 
   def_output_pad :audio,
     availability: :on_request,
-    caps: [RemoteStream, Membrane.AAC.RemoteStream],
+    accepted_format: any_of(RemoteStream, Membrane.AAC.RemoteStream),
     mode: :pull
 
   def_output_pad :video,
     availability: :on_request,
-    caps: {Membrane.H264.RemoteStream, stream_format: :byte_stream},
+    accepted_format: Membrane.H264.RemoteStream,
     mode: :pull
 
   @impl true
-  def handle_init(_opts) do
-    {:ok, %{partial: <<>>, pads_buffer: %{}, aac_asc: <<>>, header_present?: true}}
+  def handle_init(_ctx, _opts) do
+    {[], %{partial: <<>>, pads_buffer: %{}, aac_asc: <<>>, header_present?: true}}
   end
 
   @impl true
-  def handle_prepared_to_playing(_ctx, state) do
-    {{:ok, demand: :input}, state}
+  def handle_playing(_ctx, state) do
+    {[demand: :input], state}
   end
 
   @impl true
   def handle_demand(_pad, size, :buffers, _ctx, state) do
-    {{:ok, demand: {:input, size}}, state}
+    {[demand: {:input, size}], state}
   end
 
   @impl true
-  def handle_caps(_pad, _caps, _context, state), do: {:ok, state}
+  def handle_stream_format(_pad, _stream_format, _context, state), do: {[], state}
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
     case Membrane.FLV.Parser.parse_header(state.partial <> payload) do
       {:ok, _header, rest} ->
-        {{:ok, demand: :input}, %{state | partial: rest, header_present?: false}}
+        {[demand: :input], %{state | partial: rest, header_present?: false}}
 
       {:error, :not_enough_data} ->
-        {{:ok, demand: :input}, %{state | partial: state.partial <> payload}}
+        {[demand: :input], %{state | partial: state.partial <> payload}}
 
       {:error, :not_a_header} ->
         raise("Invalid data detected on the input. Expected FLV header")
@@ -87,10 +88,10 @@ defmodule Membrane.FLV.Demuxer do
       {:ok, frames, rest} ->
         {actions, state} = get_actions(frames, state)
         actions = Enum.concat(actions, demand: :input)
-        {{:ok, actions}, %{state | partial: rest}}
+        {actions, %{state | partial: rest}}
 
       {:error, :not_enough_data} ->
-        {{:ok, demand: :input}, %{state | partial: state.partial <> payload}}
+        {[demand: :input], %{state | partial: state.partial <> payload}}
     end
   end
 
@@ -98,7 +99,7 @@ defmodule Membrane.FLV.Demuxer do
   def handle_pad_added(pad, _ctx, state) do
     actions = Map.get(state.pads_buffer, pad, []) |> Enum.to_list()
     state = put_in(state, [:pads_buffer, pad], :connected)
-    {{:ok, actions}, state}
+    {actions, state}
   end
 
   @impl true
@@ -116,7 +117,7 @@ defmodule Membrane.FLV.Demuxer do
     actions = Enum.flat_map(result, &elem(&1, 0))
     pads_buffer = Enum.map(result, &elem(&1, 1)) |> Enum.into(%{})
 
-    {{:ok, actions}, %{state | pads_buffer: pads_buffer}}
+    {actions, %{state | pads_buffer: pads_buffer}}
   end
 
   defp get_actions(frames, original_state) do
@@ -129,22 +130,24 @@ defmodule Membrane.FLV.Demuxer do
       cond do
         type == :audio_config and packet.codec == :AAC ->
           Membrane.Logger.debug("Audio configuration received")
-          {:caps, {pad, %Membrane.AAC.RemoteStream{audio_specific_config: packet.payload}}}
+
+          {:stream_format,
+           {pad, %Membrane.AAC.RemoteStream{audio_specific_config: packet.payload}}}
 
         type == :audio_config ->
           [
-            caps: {pad, %RemoteStream{content_format: packet.codec}},
+            stream_format: {pad, %RemoteStream{content_format: packet.codec}},
             buffer: {pad, %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}}
           ]
 
         type == :video_config and packet.codec == :H264 ->
           Membrane.Logger.debug("Video configuration received")
 
-          {:caps,
+          {:stream_format,
            {pad,
             %Membrane.H264.RemoteStream{
-              decoder_configuration_record: packet.payload,
-              stream_format: :byte_stream
+              alignment: :au,
+              decoder_configuration_record: packet.payload
             }}}
 
         true ->
@@ -193,7 +196,7 @@ defmodule Membrane.FLV.Demuxer do
   defp get_payload(packet, _state), do: packet.payload
 
   defp notify_about_new_stream(packet) do
-    [notify: {:new_stream, pad(packet), packet.codec}]
+    [notify_parent: {:new_stream, pad(packet), packet.codec}]
   end
 
   defp get_metadata(%FLV.Packet{type: :video, codec_params: %{key_frame?: key_frame?}}),

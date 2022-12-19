@@ -4,9 +4,9 @@
 [![API Docs](https://img.shields.io/badge/api-docs-yellow.svg?style=flat)](https://hexdocs.pm/membrane_flv_plugin)
 [![CircleCI](https://circleci.com/gh/membraneframework/membrane_flv_plugin.svg?style=svg)](https://circleci.com/gh/membraneframework/membrane_flv_plugin)
 
-This package contains muxer and demuxer for FLV format. Currently it only supports AAC audio and H264 video
+This package contains muxer and demuxer elements for FLV format. Currently, it only supports AAC audio and H264 video.
 
-It is part of [Membrane Multimedia Framework](https://membraneframework.org).
+It is a part of [Membrane Multimedia Framework](https://membraneframework.org).
 
 ## Installation
 
@@ -15,17 +15,17 @@ The package can be installed by adding `membrane_flv_plugin` to your list of dep
 ```elixir
 def deps do
   [
-	{:membrane_flv_plugin, "~> 0.3.1"}
+	{:membrane_flv_plugin, "~> 0.4.0"}
   ]
 end
 ```
 
 ## Usage
-For usage examples, checkout [examples](https://github.com/membraneframework/membrane_flv_plugin/tree/master/examples) folder
+For usage examples, have a look at `examples` directory.
 
 Available examples:
-- [examples/demuxer.exs](https://github.com/membraneframework/membrane_flv_plugin/tree/master/examples/demuxer.exs) - a demonstaration of demuxing an FLV file. To run it, simply run `elixir examples/demuxer.exs`. It should generate `audio.aac` and `video.aac` extracted from the container. This examples relies on an FLV file that is part of the repository. If you cloned the repository - it should work without any modifications.
-- [examples/muxer.exs](https://github.com/membraneframework/membrane_flv_plugin/tree/master/examples/muxer.exs) - demonstration of muxing AAC and H264 to an FLV file. To run the example, run `elixir examples/muxer.exs`. It should generate `output.flv` file containing the contents of both of the source files.
+- [`examples/demuxer.exs`](examples/demuxer.exs) - a demonstration of demuxing an FLV file. To run it, simply run `elixir examples/demuxer.exs`. It should generate `audio.aac` and `video.aac` extracted from the container. This exampls relies on an FLV file from this repository. If you cloned the repository, it should work without any modifications.
+- [`examples/muxer.exs`](examples/muxer.exs) - demonstration of muxing AAC and H264 to an FLV file. To run the example, run `elixir examples/muxer.exs`. It should generate `output.flv` file with the contents of both of the source files.
 
 ## Copyright and License
 

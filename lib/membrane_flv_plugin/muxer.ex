@@ -78,7 +78,7 @@ defmodule Membrane.FLV.Muxer do
   @impl true
   def handle_process(Pad.ref(type, stream_id) = pad, buffer, ctx, state) do
     if ctx.pads[pad].stream_format == nil,
-      do: raise("stream_format must be sent before sending a packet")
+      do: raise("Stream format must be sent before sending a packet")
 
     dts = get_timestamp(buffer.dts || buffer.pts)
     pts = get_timestamp(buffer.pts) || dts
@@ -139,7 +139,7 @@ defmodule Membrane.FLV.Muxer do
   def handle_stream_format(Pad.ref(type, _id) = _pad, stream_format, _ctx, _state),
     do:
       raise(
-        "stream_format `#{inspect(stream_format)}` are not supported for stream type #{inspect(type)}"
+        "Stream format '#{inspect(stream_format)}' is not supported for stream type #{inspect(type)}"
       )
 
   @impl true

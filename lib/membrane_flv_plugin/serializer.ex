@@ -104,13 +104,13 @@ defmodule Membrane.FLV.Serializer do
   end
 
   @spec aac_to_audio_specific_config(AAC.t()) :: binary()
-  def aac_to_audio_specific_config(%AAC{} = caps) do
-    aot = AAC.profile_to_aot_id(caps.profile)
-    sr_index = AAC.sample_rate_to_sampling_frequency_id(caps.sample_rate)
-    channel_configuration = AAC.channels_to_channel_config_id(caps.channels)
+  def aac_to_audio_specific_config(%AAC{} = format) do
+    aot = AAC.profile_to_aot_id(format.profile)
+    sr_index = AAC.sample_rate_to_sampling_frequency_id(format.sample_rate)
+    channel_configuration = AAC.channels_to_channel_config_id(format.channels)
 
     frame_length_flag =
-      case caps.samples_per_frame do
+      case format.samples_per_frame do
         960 -> 1
         1024 -> 0
       end

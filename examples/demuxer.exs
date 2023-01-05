@@ -1,7 +1,7 @@
 Mix.install([
-  {:membrane_aac_plugin, "~> 0.13.0"},
-  {:membrane_h264_ffmpeg_plugin, "~> 0.25.0"},
-  {:membrane_file_plugin, "~> 0.13.2"},
+  :membrane_aac_plugin,
+  :membrane_h264_ffmpeg_plugin,
+  :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
 

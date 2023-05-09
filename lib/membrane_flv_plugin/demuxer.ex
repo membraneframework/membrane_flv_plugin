@@ -9,6 +9,11 @@ defmodule Membrane.FLV.Demuxer do
   If you want to pre-link the pipeline and skip handling notifications, make sure use the following output pads:
   - `Pad.ref(:audio, 0)` for audio stream
   - `Pad.ref(:video, 0)` for video stream
+
+  ## Note
+  The demuxer implements the [Enhanced RTMP specification](https://github.com/veovera/enhanced-rtmp) in terms of parsing.
+  It does NOT support processing of the protocols other than H264 and AAC.
+
   """
   use Membrane.Filter
   use Bunch
@@ -52,7 +57,14 @@ defmodule Membrane.FLV.Demuxer do
 
   @impl true
   def handle_init(_ctx, _opts) do
-    {[], %{partial: <<>>, pads_buffer: %{}, aac_asc: <<>>, header_present?: true}}
+    {[],
+     %{
+       partial: <<>>,
+       pads_buffer: %{},
+       aac_asc: <<>>,
+       header_present?: true,
+       ignored_packets: 0
+     }}
   end
 
   @impl true
@@ -67,6 +79,17 @@ defmodule Membrane.FLV.Demuxer do
 
   @impl true
   def handle_stream_format(_pad, _stream_format, _context, state), do: {[], state}
+
+  @max_ignored_packets 300
+  @impl true
+  def handle_process(:input, _buffer, _ctx, %{ignored_packets: ignored_packets} = state)
+      when ignored_packets > 0 do
+    if ignored_packets >= @max_ignored_packets do
+      raise "Too many ignored packets..."
+    end
+
+    {[], %{state | ignored_packets: ignored_packets + 1}}
+  end
 
   @impl true
   def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
@@ -92,6 +115,10 @@ defmodule Membrane.FLV.Demuxer do
 
       {:error, :not_enough_data} ->
         {[demand: :input], %{state | partial: state.partial <> payload}}
+
+      {:error, {:unsupported_codec, codec}} ->
+        {[notify_parent: {:unsupported_codec, codec}],
+         %{ignored_packets: state.ignored_packets + 1}}
     end
   end
 
@@ -131,24 +158,32 @@ defmodule Membrane.FLV.Demuxer do
         type == :audio_config and packet.codec == :AAC ->
           Membrane.Logger.debug("Audio configuration received")
 
-          {:stream_format,
-           {pad, %Membrane.AAC.RemoteStream{audio_specific_config: packet.payload}}}
+          {[
+             stream_format:
+               {pad, %Membrane.AAC.RemoteStream{audio_specific_config: packet.payload}}
+           ], state}
 
         type == :audio_config ->
-          [
-            stream_format: {pad, %RemoteStream{content_format: packet.codec}},
-            buffer: {pad, %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}}
-          ]
+          {[
+             stream_format: {pad, %RemoteStream{content_format: packet.codec}},
+             buffer: {pad, %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}}
+           ], state}
 
         type == :video_config and packet.codec == :H264 ->
           Membrane.Logger.debug("Video configuration received")
 
-          {:stream_format,
-           {pad,
-            %Membrane.H264.RemoteStream{
-              alignment: :au,
-              decoder_configuration_record: packet.payload
-            }}}
+          {[
+             stream_format:
+               {pad,
+                %Membrane.H264.RemoteStream{
+                  alignment: :au,
+                  decoder_configuration_record: packet.payload
+                }}
+           ], state}
+
+        type == :video_config and packet.codec in [:AV1, :HEVC, :VP9] ->
+          {[notify_parent: {:unsupported_codec, packet.codec}],
+           %{state | ignored_packets: state.ignored_packets + 1}}
 
         true ->
           buffer = %Buffer{
@@ -158,14 +193,14 @@ defmodule Membrane.FLV.Demuxer do
             payload: get_payload(packet, state)
           }
 
-          {:buffer, {pad, buffer}}
+          {[buffer: {pad, buffer}], state}
       end
-      |> buffer_or_send(packet, state)
+      |> buffer_or_send(packet)
       |> then(fn {out_actions, state} -> {actions ++ out_actions, state} end)
     end)
   end
 
-  defp buffer_or_send(actions, packet, state) when is_list(actions) do
+  defp buffer_or_send({actions, state}, packet) do
     Enum.reduce(actions, {[], state}, fn action, {actions, state} ->
       {out_actions, state} = buffer_or_send(action, packet, state)
       {actions ++ out_actions, state}
@@ -204,9 +239,15 @@ defmodule Membrane.FLV.Demuxer do
 
   defp get_metadata(_packet), do: %{}
 
-  defp pad(%FLV.Packet{type: type, stream_id: stream_id}) when type in [:audio_config, :audio],
-    do: Pad.ref(:audio, stream_id)
+  defp pad(%FLV.Packet{type: type, stream_id: stream_id}) do
+    type =
+      case type do
+        :audio -> :audio
+        :audio_config -> :audio
+        :video -> :video
+        :video_config -> :video
+      end
 
-  defp pad(%FLV.Packet{type: type, stream_id: stream_id}) when type in [:video_config, :video],
-    do: Pad.ref(:video, stream_id)
+    Pad.ref(type, stream_id)
+  end
 end

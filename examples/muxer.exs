@@ -53,7 +53,7 @@ defmodule Example do
   # the rest of the Example module is only used for termination of the pipeline after processing finishes
   @impl true
   def handle_element_end_of_stream(:sink, _pad, _ctx, state) do
-    {[terminate: :shutdown], state}
+    {[terminate: :normal], state}
   end
 
   @impl true

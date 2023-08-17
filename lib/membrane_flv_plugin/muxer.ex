@@ -36,6 +36,7 @@ defmodule Membrane.FLV.Muxer do
     {[],
      %{
        previous_tag_size: 0,
+       init_dts: %{},
        last_dts: %{},
        header_sent: false
      }}
@@ -76,12 +77,17 @@ defmodule Membrane.FLV.Muxer do
   end
 
   @impl true
-  def handle_process(Pad.ref(type, stream_id) = pad, buffer, ctx, state) do
-    if ctx.pads[pad].stream_format == nil,
-      do: raise("Stream format must be sent before sending a packet")
-
+  def handle_process(Pad.ref(type, stream_id) = pad, buffer, _ctx, state) do
     dts = get_timestamp(buffer.dts || buffer.pts)
     pts = get_timestamp(buffer.pts) || dts
+
+    {dts, pts, state} =
+      case state.init_dts[pad] do
+        # FLV requires DTS to start from 0
+        nil -> {0, pts - dts, put_in(state, [:init_dts, pad], dts)}
+        init_dts -> {dts - init_dts, pts - init_dts, state}
+      end
+
     state = put_in(state, [:last_dts, pad], dts)
 
     {actions, state} =

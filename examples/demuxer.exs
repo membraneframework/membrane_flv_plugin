@@ -2,7 +2,7 @@ Logger.configure(level: :info)
 
 Mix.install([
   :membrane_aac_plugin,
-  {:membrane_h264_plugin, "~> 0.6.0", override: true},
+  :membrane_h264_plugin,
   :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
@@ -43,7 +43,7 @@ defmodule Example do
     state = Map.update!(state, :eos_left, &(&1 - 1))
 
     if state.eos_left == 0 do
-      {[terminate: :shutdown], state}
+      {[terminate: :normal], state}
     else
       {[], state}
     end

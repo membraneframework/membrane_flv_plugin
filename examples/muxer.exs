@@ -4,7 +4,7 @@ Mix.install([
   :membrane_hackney_plugin,
   :membrane_aac_plugin,
   :membrane_h264_plugin,
-  {:membrane_mp4_plugin, github: "membraneframework/membrane_mp4_plugin", branch: "new-parser"},
+  :membrane_mp4_plugin,
   :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])

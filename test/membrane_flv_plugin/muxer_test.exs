@@ -17,10 +17,8 @@ defmodule Membrane.FLV.Muxer.Test do
       child(:muxer, Membrane.FLV.Muxer)
       |> child(:sink, %Membrane.File.Sink{location: @output}),
       child(:video_src, %Membrane.File.Source{location: "test/fixtures/input.h264"})
-      |> child(:video_parser, %Membrane.H264.FFmpeg.Parser{
-        attach_nalus?: true,
-        alignment: :au,
-        framerate: {30, 1}
+      |> child(:video_parser, %Membrane.H264.Parser{
+        generate_best_effort_timestamps: %{framerate: {30, 1}}
       })
       |> child(:video_payloader, Membrane.MP4.Payloader.H264)
       |> via_in(Pad.ref(:video, 0))

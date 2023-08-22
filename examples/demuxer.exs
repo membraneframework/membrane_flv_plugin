@@ -1,6 +1,8 @@
+Logger.configure(level: :info)
+
 Mix.install([
   :membrane_aac_plugin,
-  :membrane_h264_ffmpeg_plugin,
+  :membrane_h264_plugin,
   :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
@@ -26,8 +28,8 @@ defmodule Example do
       # setup output video stream
       get_child(:demuxer)
       |> via_out(Pad.ref(:video, 0))
-      |> child({:parser, :video}, %Membrane.H264.FFmpeg.Parser{
-        framerate: {30, 1}
+      |> child({:parser, :video}, %Membrane.H264.Parser{
+        generate_best_effort_timestamps: %{framerate: {30, 1}}
       })
       |> child({:sink, :video}, %Membrane.File.Sink{location: "video.h264"})
     ]
@@ -41,7 +43,7 @@ defmodule Example do
     state = Map.update!(state, :eos_left, &(&1 - 1))
 
     if state.eos_left == 0 do
-      {[terminate: :shutdown], state}
+      {[terminate: :normal], state}
     else
       {[], state}
     end

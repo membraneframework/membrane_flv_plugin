@@ -1,6 +1,5 @@
 Mix.install([
   :membrane_aac_plugin,
-  :membrane_h264_ffmpeg_plugin,
   :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
@@ -19,15 +18,14 @@ defmodule Example do
       get_child(:demuxer)
       |> via_out(Pad.ref(:audio, 0))
       |> child({:parser, :audio}, %Membrane.AAC.Parser{
-        in_encapsulation: :none,
         out_encapsulation: :ADTS
       })
       |> child({:sink, :audio}, %Membrane.File.Sink{location: "audio.aac"}),
       # setup output video stream
       get_child(:demuxer)
       |> via_out(Pad.ref(:video, 0))
-      |> child({:parser, :video}, %Membrane.H264.FFmpeg.Parser{
-        framerate: {30, 1}
+      |> child({:parser, :video}, %Membrane.H264.Parser{
+        generate_best_effort_timestamps: %{framerate: {30, 1}}
       })
       |> child({:sink, :video}, %Membrane.File.Sink{location: "video.h264"})
     ]

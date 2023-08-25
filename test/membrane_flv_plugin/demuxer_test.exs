@@ -32,14 +32,12 @@ defmodule Membrane.FLV.Demuxer.Test do
         case codec do
           :AAC ->
             {%Membrane.AAC.Parser{
-               in_encapsulation: :none,
                out_encapsulation: :ADTS
              }, "/tmp/audio.aac"}
 
           :H264 ->
-            {%Membrane.H264.FFmpeg.Parser{
-               alignment: :au,
-               skip_until_parameters?: false
+            {%Membrane.H264.Parser{
+               output_alignment: :au,
              }, "/tmp/video.h264"}
         end
 
@@ -87,6 +85,6 @@ defmodule Membrane.FLV.Demuxer.Test do
     video = File.read!("/tmp/video.h264")
 
     assert byte_size(audio) == 96_303
-    assert byte_size(video) == 144_615
+    assert byte_size(video) == 144_918
   end
 end

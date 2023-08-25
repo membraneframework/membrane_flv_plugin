@@ -20,7 +20,7 @@ defmodule Membrane.FLV.Demuxer do
 
   require Membrane.Logger
 
-  alias Membrane.{Buffer, FLV}
+  alias Membrane.{AAC, Buffer, FLV, H264}
   alias Membrane.FLV.Parser
   alias Membrane.RemoteStream
 
@@ -47,12 +47,12 @@ defmodule Membrane.FLV.Demuxer do
 
   def_output_pad :audio,
     availability: :on_request,
-    accepted_format: any_of(RemoteStream, Membrane.AAC.RemoteStream),
+    accepted_format: any_of(RemoteStream, AAC),
     mode: :pull
 
   def_output_pad :video,
     availability: :on_request,
-    accepted_format: Membrane.H264.RemoteStream,
+    accepted_format: %H264{stream_structure: {avc, _dcr}} when avc in [:avc1, :avc3],
     mode: :pull
 
   @impl true
@@ -160,7 +160,7 @@ defmodule Membrane.FLV.Demuxer do
 
           {[
              stream_format:
-               {pad, %Membrane.AAC.RemoteStream{audio_specific_config: packet.payload}}
+               {pad, %AAC{config: {:audio_specific_config, packet.payload}}}
            ], state}
 
         type == :audio_config ->
@@ -175,9 +175,10 @@ defmodule Membrane.FLV.Demuxer do
           {[
              stream_format:
                {pad,
-                %Membrane.H264.RemoteStream{
+                %H264{
                   alignment: :au,
-                  decoder_configuration_record: packet.payload
+                  #TODO can this be avc1
+                  stream_structure: {:avc3, packet.payload}
                 }}
            ], state}
 
@@ -190,7 +191,8 @@ defmodule Membrane.FLV.Demuxer do
             pts: pts,
             dts: dts,
             metadata: get_metadata(packet),
-            payload: get_payload(packet, state)
+            # payload: get_payload(packet, state)
+            payload: packet.payload
           }
 
           {[buffer: {pad, buffer}], state}

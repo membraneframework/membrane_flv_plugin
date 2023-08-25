@@ -158,10 +158,7 @@ defmodule Membrane.FLV.Demuxer do
         type == :audio_config and packet.codec == :AAC ->
           Membrane.Logger.debug("Audio configuration received")
 
-          {[
-             stream_format:
-               {pad, %AAC{config: {:audio_specific_config, packet.payload}}}
-           ], state}
+          {[stream_format: {pad, %AAC{config: {:audio_specific_config, packet.payload}}}], state}
 
         type == :audio_config ->
           {[
@@ -177,7 +174,7 @@ defmodule Membrane.FLV.Demuxer do
                {pad,
                 %H264{
                   alignment: :au,
-                  #TODO can this be avc1
+                  # TODO can this be avc1
                   stream_structure: {:avc3, packet.payload}
                 }}
            ], state}

@@ -37,7 +37,7 @@ defmodule Membrane.FLV.Demuxer.Test do
 
           :H264 ->
             {%Membrane.H264.Parser{
-               output_alignment: :au,
+               output_alignment: :au
              }, "/tmp/video.h264"}
         end
 

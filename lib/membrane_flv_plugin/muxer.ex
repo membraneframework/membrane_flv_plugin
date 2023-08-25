@@ -122,7 +122,11 @@ defmodule Membrane.FLV.Muxer do
 
   @impl true
   def handle_stream_format(
-        Pad.ref(:video, stream_id) = pad, %H264{stream_structure: {:avc1, dcr}}, _ctx, state) do
+        Pad.ref(:video, stream_id) = pad,
+        %H264{stream_structure: {:avc1, dcr}},
+        _ctx,
+        state
+      ) do
     timestamp = Map.get(state.last_dts, pad, 0) |> get_timestamp()
 
     %Packet{

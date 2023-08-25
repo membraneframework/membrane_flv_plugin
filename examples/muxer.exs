@@ -26,7 +26,8 @@ defmodule Example do
         hackney_opts: [follow_redirect: true]
       })
       |> child({:parser, :audio}, %Membrane.AAC.Parser{
-        out_encapsulation: :none
+        out_encapsulation: :none,
+        output_config: :audio_specific_config
       })
       |> via_in(Pad.ref(:audio, 0))
       |> get_child(:muxer),

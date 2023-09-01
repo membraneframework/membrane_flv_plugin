@@ -18,7 +18,6 @@ defmodule Membrane.FLV.Muxer.Test do
       |> child(:sink, %Membrane.File.Sink{location: @output}),
       child(:video_src, %Membrane.File.Source{location: "test/fixtures/input.h264"})
       |> child(:video_parser, %Membrane.H264.Parser{
-        output_alignment: :au,
         output_stream_structure: :avc1,
         generate_best_effort_timestamps: %{framerate: {30, 1}}
       })

@@ -1,7 +1,9 @@
+Logger.configure(level: :info)
+
 Mix.install([
   :membrane_hackney_plugin,
   :membrane_aac_plugin,
-  :membrane_mp4_plugin,
+  :membrane_h264_plugin,
   :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
@@ -37,7 +39,6 @@ defmodule Example do
         hackney_opts: [follow_redirect: true]
       })
       |> child({:parser, :video}, %Membrane.H264.Parser{
-        output_alignment: :au,
         output_stream_structure: :avc1,
         generate_best_effort_timestamps: %{framerate: {30, 1}}
       })
@@ -51,7 +52,7 @@ defmodule Example do
   # the rest of the Example module is only used for termination of the pipeline after processing finishes
   @impl true
   def handle_element_end_of_stream(:sink, _pad, _ctx, state) do
-    {[terminate: :shutdown], state}
+    {[terminate: :normal], state}
   end
 
   @impl true

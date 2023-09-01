@@ -1,3 +1,5 @@
+Logger.configure(level: :info)
+
 Mix.install([
   :membrane_aac_plugin,
   :membrane_file_plugin,
@@ -41,7 +43,7 @@ defmodule Example do
     state = Map.update!(state, :eos_left, &(&1 - 1))
 
     if state.eos_left == 0 do
-      {[terminate: :shutdown], state}
+      {[terminate: :normal], state}
     else
       {[], state}
     end

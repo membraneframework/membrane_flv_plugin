@@ -36,9 +36,7 @@ defmodule Membrane.FLV.Demuxer.Test do
              }, "/tmp/audio.aac"}
 
           :H264 ->
-            {%Membrane.H264.Parser{
-               output_alignment: :au
-             }, "/tmp/video.h264"}
+            {Membrane.H264.Parser, "/tmp/video.h264"}
         end
 
       structure = [

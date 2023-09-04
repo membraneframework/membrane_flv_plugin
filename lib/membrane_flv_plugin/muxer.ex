@@ -11,18 +11,19 @@ defmodule Membrane.FLV.Muxer do
   """
   use Membrane.Filter
 
-  alias Membrane.{AAC, Buffer, FLV, RemoteStream}
+  require Membrane.H264
+  alias Membrane.{AAC, Buffer, FLV, H264, RemoteStream}
   alias Membrane.FLV.{Header, Packet, Serializer}
 
   def_input_pad :audio,
     availability: :on_request,
-    accepted_format: %AAC{encapsulation: :none},
+    accepted_format: %AAC{encapsulation: :none, config: {:audio_specific_config, _config}},
     mode: :pull,
     demand_unit: :buffers
 
   def_input_pad :video,
     availability: :on_request,
-    accepted_format: Membrane.MP4.Payload,
+    accepted_format: %H264{stream_structure: structure} when H264.is_avc(structure),
     mode: :pull,
     demand_unit: :buffers
 
@@ -107,13 +108,18 @@ defmodule Membrane.FLV.Muxer do
   end
 
   @impl true
-  def handle_stream_format(Pad.ref(:audio, stream_id) = pad, %AAC{} = stream_format, _ctx, state) do
+  def handle_stream_format(
+        Pad.ref(:audio, stream_id) = pad,
+        %AAC{config: {:audio_specific_config, config}},
+        _ctx,
+        state
+      ) do
     timestamp = Map.get(state.last_dts, pad, 0) |> get_timestamp()
 
     %Packet{
       type: :audio_config,
       stream_id: stream_id,
-      payload: Serializer.aac_to_audio_specific_config(stream_format),
+      payload: config,
       codec: codec(:audio),
       pts: timestamp,
       dts: timestamp
@@ -124,7 +130,7 @@ defmodule Membrane.FLV.Muxer do
   @impl true
   def handle_stream_format(
         Pad.ref(:video, stream_id) = pad,
-        %Membrane.MP4.Payload{content: %Membrane.MP4.Payload.AVC1{avcc: config}} = _stream_format,
+        %H264{stream_structure: {:avc1, dcr}},
         _ctx,
         state
       ) do
@@ -133,7 +139,7 @@ defmodule Membrane.FLV.Muxer do
     %Packet{
       type: :video_config,
       stream_id: stream_id,
-      payload: config,
+      payload: dcr,
       codec: codec(:video),
       pts: timestamp,
       dts: timestamp

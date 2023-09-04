@@ -4,7 +4,7 @@ Mix.install([
   :membrane_hackney_plugin,
   :membrane_aac_plugin,
   :membrane_h264_plugin,
-  :membrane_mp4_plugin,
+  :membrane_h264_format,
   :membrane_file_plugin,
   {:membrane_flv_plugin, path: __DIR__ |> Path.join("..") |> Path.expand()}
 ])
@@ -29,8 +29,8 @@ defmodule Example do
         hackney_opts: [follow_redirect: true]
       })
       |> child({:parser, :audio}, %Membrane.AAC.Parser{
-        in_encapsulation: :ADTS,
-        out_encapsulation: :none
+        out_encapsulation: :none,
+        output_config: :audio_specific_config
       })
       |> via_in(Pad.ref(:audio, 0))
       |> get_child(:muxer),
@@ -40,9 +40,9 @@ defmodule Example do
         hackney_opts: [follow_redirect: true]
       })
       |> child({:parser, :video}, %Membrane.H264.Parser{
+        output_stream_structure: :avc1,
         generate_best_effort_timestamps: %{framerate: {30, 1}}
       })
-      |> child({:payloader, :video}, Membrane.MP4.Payloader.H264)
       |> via_in(Pad.ref(:video, 0))
       |> get_child(:muxer)
     ]

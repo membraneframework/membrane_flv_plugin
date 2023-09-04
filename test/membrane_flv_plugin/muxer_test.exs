@@ -18,15 +18,15 @@ defmodule Membrane.FLV.Muxer.Test do
       |> child(:sink, %Membrane.File.Sink{location: @output}),
       child(:video_src, %Membrane.File.Source{location: "test/fixtures/input.h264"})
       |> child(:video_parser, %Membrane.H264.Parser{
+        output_stream_structure: :avc1,
         generate_best_effort_timestamps: %{framerate: {30, 1}}
       })
-      |> child(:video_payloader, Membrane.MP4.Payloader.H264)
       |> via_in(Pad.ref(:video, 0))
       |> get_child(:muxer),
       child(:audio_src, %Membrane.File.Source{location: "test/fixtures/input.aac"})
       |> child(:audio_parser, %Membrane.AAC.Parser{
-        in_encapsulation: :ADTS,
-        out_encapsulation: :none
+        out_encapsulation: :none,
+        output_config: :audio_specific_config
       })
       |> via_in(Pad.ref(:audio, 0))
       |> get_child(:muxer)

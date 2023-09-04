@@ -11,6 +11,7 @@ defmodule Membrane.FLV.Muxer do
   """
   use Membrane.Filter
 
+  require Membrane.H264
   alias Membrane.{AAC, Buffer, FLV, H264, RemoteStream}
   alias Membrane.FLV.{Header, Packet, Serializer}
 
@@ -22,7 +23,7 @@ defmodule Membrane.FLV.Muxer do
 
   def_input_pad :video,
     availability: :on_request,
-    accepted_format: %H264{stream_structure: {:avc1, _dcr}},
+    accepted_format: %H264{stream_structure: structure} when H264.is_avc(structure),
     mode: :pull,
     demand_unit: :buffers
 

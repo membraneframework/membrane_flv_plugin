@@ -47,12 +47,16 @@ defmodule Membrane.FLV.Demuxer do
 
   def_output_pad :audio,
     availability: :on_request,
-    accepted_format: any_of(RemoteStream, AAC),
+    accepted_format:
+      any_of(
+        RemoteStream,
+        %AAC{encapsulation: :none, config: {:audio_specific_config, _config}}
+      ),
     mode: :pull
 
   def_output_pad :video,
     availability: :on_request,
-    accepted_format: %H264{stream_structure: {avc, _dcr}} when avc in [:avc1, :avc3],
+    accepted_format: %H264{stream_structure: {:avc3, _dcr}},
     mode: :pull
 
   @impl true
@@ -163,7 +167,7 @@ defmodule Membrane.FLV.Demuxer do
         type == :audio_config ->
           {[
              stream_format: {pad, %RemoteStream{content_format: packet.codec}},
-             buffer: {pad, %Buffer{pts: pts, dts: dts, payload: get_payload(packet, state)}}
+             buffer: {pad, %Buffer{pts: pts, dts: dts, payload: packet.payload}}
            ], state}
 
         type == :video_config and packet.codec == :H264 ->
@@ -171,12 +175,7 @@ defmodule Membrane.FLV.Demuxer do
 
           {[
              stream_format:
-               {pad,
-                %H264{
-                  alignment: :au,
-                  # TODO can this be avc1
-                  stream_structure: {:avc3, packet.payload}
-                }}
+               {pad, %H264{alignment: :au, stream_structure: {:avc3, packet.payload}}}
            ], state}
 
         type == :video_config and packet.codec in [:AV1, :HEVC, :VP9] ->
@@ -188,7 +187,6 @@ defmodule Membrane.FLV.Demuxer do
             pts: pts,
             dts: dts,
             metadata: get_metadata(packet),
-            # payload: get_payload(packet, state)
             payload: packet.payload
           }
 
@@ -222,12 +220,6 @@ defmodule Membrane.FLV.Demuxer do
         {notify_about_new_stream(packet), state}
     end
   end
-
-  defp get_payload(%FLV.Packet{type: :video, codec: :H264} = packet, _state) do
-    Membrane.AVC.Utils.to_annex_b(packet.payload)
-  end
-
-  defp get_payload(packet, _state), do: packet.payload
 
   defp notify_about_new_stream(packet) do
     [notify_parent: {:new_stream, pad(packet), packet.codec}]

@@ -175,7 +175,7 @@ defmodule Membrane.FLV.Demuxer do
 
           {[
              stream_format:
-               {pad, %H264{alignment: :au, stream_structure: {:avc3, packet.payload}}}
+               {pad, %H264{alignment: :nalu, stream_structure: {:avc3, packet.payload}}}
            ], state}
 
         type == :video_config and packet.codec in [:AV1, :HEVC, :VP9] ->

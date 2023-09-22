@@ -15,7 +15,7 @@ The package can be installed by adding `membrane_flv_plugin` to your list of dep
 ```elixir
 def deps do
   [
-    {:membrane_flv_plugin, "~> 0.9.0"}
+    {:membrane_flv_plugin, "~> 0.10.0"}
   ]
 end
 ```

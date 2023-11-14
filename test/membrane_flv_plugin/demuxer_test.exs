@@ -60,8 +60,6 @@ defmodule Membrane.FLV.Demuxer.Test do
         custom_args: "test/fixtures/reference.flv"
       )
 
-    Pipeline.execute_actions(pid, playback: :playing)
-
     on_exit(fn ->
       File.rm!("/tmp/audio.aac")
       File.rm!("/tmp/video.h264")

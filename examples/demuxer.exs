@@ -35,7 +35,7 @@ defmodule Example do
       |> child({:sink, :video}, %Membrane.File.Sink{location: "video.h264"})
     ]
 
-    {[spec: structure, playback: :playing], %{eos_left: 2}}
+    {[spec: structure], %{eos_left: 2}}
   end
 
   # the rest of the Example module is only used for termination of the pipeline after processing finishes

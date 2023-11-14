@@ -42,7 +42,7 @@ defmodule Membrane.FLV.Demuxer do
     accepted_format:
       %RemoteStream{content_format: content_format, type: :bytestream}
       when content_format in [nil, FLV],
-    mode: :pull,
+    flow_control: :manual,
     demand_unit: :buffers
 
   def_output_pad :audio,
@@ -52,12 +52,12 @@ defmodule Membrane.FLV.Demuxer do
         RemoteStream,
         %AAC{encapsulation: :none, config: {:audio_specific_config, _config}}
       ),
-    mode: :pull
+    flow_control: :manual
 
   def_output_pad :video,
     availability: :on_request,
     accepted_format: %H264{stream_structure: {:avc3, _dcr}},
-    mode: :pull
+    flow_control: :manual
 
   @impl true
   def handle_init(_ctx, _opts) do
@@ -86,7 +86,7 @@ defmodule Membrane.FLV.Demuxer do
 
   @max_ignored_packets 300
   @impl true
-  def handle_process(:input, _buffer, _ctx, %{ignored_packets: ignored_packets} = state)
+  def handle_buffer(:input, _buffer, _ctx, %{ignored_packets: ignored_packets} = state)
       when ignored_packets > 0 do
     if ignored_packets >= @max_ignored_packets do
       raise "Too many ignored packets..."
@@ -96,7 +96,7 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
+  def handle_buffer(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
     case Membrane.FLV.Parser.parse_header(state.partial <> payload) do
       {:ok, _header, rest} ->
         {[demand: :input], %{state | partial: rest, header_present?: false}}
@@ -110,7 +110,7 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
-  def handle_process(:input, %Buffer{payload: payload}, _ctx, %{header_present?: false} = state) do
+  def handle_buffer(:input, %Buffer{payload: payload}, _ctx, %{header_present?: false} = state) do
     case Parser.parse_body(state.partial <> payload) do
       {:ok, frames, rest} ->
         {actions, state} = get_actions(frames, state)

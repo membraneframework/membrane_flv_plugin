@@ -18,19 +18,19 @@ defmodule Membrane.FLV.Muxer do
   def_input_pad :audio,
     availability: :on_request,
     accepted_format: %AAC{encapsulation: :none, config: {:audio_specific_config, _config}},
-    mode: :pull,
+    flow_control: :manual,
     demand_unit: :buffers
 
   def_input_pad :video,
     availability: :on_request,
     accepted_format: %H264{stream_structure: structure} when H264.is_avc(structure),
-    mode: :pull,
+    flow_control: :manual,
     demand_unit: :buffers
 
   def_output_pad :output,
     availability: :always,
     accepted_format: %Membrane.RemoteStream{content_format: FLV},
-    mode: :pull
+    flow_control: :manual
 
   @impl true
   def handle_init(_ctx, _opts) do
@@ -48,7 +48,7 @@ defmodule Membrane.FLV.Muxer do
     do: raise(ArgumentError, message: "Stream id must always be 0")
 
   @impl true
-  def handle_pad_added(_pad, ctx, _state) when ctx.playback_state == :playing,
+  def handle_pad_added(_pad, ctx, _state) when ctx.playback == :playing,
     do: raise("Adding pads after transition to state :playing is not allowed")
 
   @impl true
@@ -78,7 +78,7 @@ defmodule Membrane.FLV.Muxer do
   end
 
   @impl true
-  def handle_process(Pad.ref(type, stream_id) = pad, buffer, _ctx, state) do
+  def handle_buffer(Pad.ref(type, stream_id) = pad, buffer, _ctx, state) do
     dts = get_timestamp(buffer.dts || buffer.pts)
     pts = get_timestamp(buffer.pts) || dts
 

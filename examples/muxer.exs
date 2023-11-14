@@ -47,7 +47,7 @@ defmodule Example do
       |> get_child(:muxer)
     ]
 
-    {[spec: structure, playback: :playing], %{}}
+    {[spec: structure], %{}}
   end
 
   # the rest of the Example module is only used for termination of the pipeline after processing finishes

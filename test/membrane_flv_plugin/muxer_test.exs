@@ -32,9 +32,7 @@ defmodule Membrane.FLV.Muxer.Test do
       |> get_child(:muxer)
     ]
 
-    pid = Pipeline.start_link_supervised!(structure: structure)
-
-    Pipeline.execute_actions(pid, playback: :playing)
+    pid = Pipeline.start_link_supervised!(spec: structure)
 
     %{pid: pid}
   end

@@ -1,5 +1,5 @@
 defmodule Membrane.FLV.Demuxer.Test do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   import Membrane.Testing.Assertions
 
@@ -9,76 +9,63 @@ defmodule Membrane.FLV.Demuxer.Test do
     use Membrane.Pipeline
 
     @impl true
-    def handle_init(_ctx, input_file_path) do
+    def handle_init(_ctx, opts) do
       structure = [
         child(:src, %Membrane.File.Source{
-          location: input_file_path
+          location: opts.input_flv_path
         })
         |> child(:demuxer, Membrane.FLV.Demuxer)
+        # pre-link only audio to cover both pre-link and dynamic linking cases
+        |> via_out(Pad.ref(:audio, 0))
+        |> child({:parser, :audio}, %Membrane.AAC.Parser{out_encapsulation: :ADTS})
+        |> child({:sink, :audio}, %Membrane.File.Sink{location: opts.output_audio_path})
       ]
 
-      {[spec: structure], %{}}
+      {[spec: structure], opts}
     end
 
     @impl true
     def handle_child_notification(
-          {:new_stream, Pad.ref(type, _ref) = pad, codec},
+          {:new_stream, Pad.ref(:video, 0), :H264},
           :demuxer,
           _ctx,
           state
-        )
-        when {type, codec} in [{:audio, :AAC}, {:video, :H264}] do
-      {parser, location} =
-        case codec do
-          :AAC ->
-            {%Membrane.AAC.Parser{
-               out_encapsulation: :ADTS
-             }, "/tmp/audio.aac"}
-
-          :H264 ->
-            {Membrane.H264.Parser, "/tmp/video.h264"}
-        end
-
+        ) do
       structure = [
         get_child(:demuxer)
-        |> via_out(pad)
-        |> child({:parser, type}, parser)
-        |> child({:sink, type}, %Membrane.File.Sink{location: location})
+        |> via_out(Pad.ref(:video, 0))
+        |> child({:parser, :video}, Membrane.H264.Parser)
+        |> child({:sink, :video}, %Membrane.File.Sink{location: state.output_video_path})
       ]
 
       {[spec: structure], state}
     end
-
-    @impl true
-    def handle_child_notification(_notification, _source, _ctx, state), do: {[], state}
   end
 
-  setup do
+  setup ctx do
+    out_paths =
+      %{
+        output_audio_path: Path.join(ctx.tmp_dir, "audio.aac"),
+        output_video_path: Path.join(ctx.tmp_dir, "video.h264")
+      }
+
     pid =
       Pipeline.start_link_supervised!(
         module: Support.Pipeline,
-        custom_args: "test/fixtures/reference.flv"
+        custom_args: Map.put(out_paths, :input_flv_path, "test/fixtures/reference.flv")
       )
 
-    on_exit(fn ->
-      File.rm!("/tmp/audio.aac")
-      File.rm!("/tmp/video.h264")
-    end)
-
-    %{pid: pid}
+    Map.put(out_paths, :pid, pid)
   end
 
-  test "streams are detected", %{pid: pid} do
+  @tag :tmp_dir
+  test "streams are detected", %{pid: pid} = ctx do
     assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :H264})
-    assert_pipeline_notified(pid, :demuxer, {:new_stream, _pad, :AAC})
     assert_end_of_stream(pid, {:sink, :video}, :input)
     assert_end_of_stream(pid, {:sink, :audio}, :input)
 
-    assert File.exists?("/tmp/audio.aac")
-    assert File.exists?("/tmp/video.h264")
-
-    audio = File.read!("/tmp/audio.aac")
-    video = File.read!("/tmp/video.h264")
+    assert {:ok, audio} = File.read(ctx.output_audio_path)
+    assert {:ok, video} = File.read(ctx.output_video_path)
 
     assert byte_size(audio) == 96_303
     assert byte_size(video) == 144_918

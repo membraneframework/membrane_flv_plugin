@@ -1,5 +1,5 @@
 defmodule Membrane.FLV.Muxer.Test do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   import Membrane.Testing.Assertions
   import Membrane.ChildrenSpec
@@ -9,13 +9,13 @@ defmodule Membrane.FLV.Muxer.Test do
   alias Membrane.Pad
   alias Membrane.Testing.Pipeline
 
-  @output "/tmp/output.flv"
   @reference "test/fixtures/reference.flv"
+  defp output(tmp_dir), do: Path.join(tmp_dir, "output.flv")
 
-  setup do
+  setup ctx do
     structure = [
       child(:muxer, Membrane.FLV.Muxer)
-      |> child(:sink, %Membrane.File.Sink{location: @output}),
+      |> child(:sink, %Membrane.File.Sink{location: output(ctx.tmp_dir)}),
       child(:video_src, %Membrane.File.Source{location: "test/fixtures/input.h264"})
       |> child(:video_parser, %Membrane.H264.Parser{
         output_stream_structure: :avc1,
@@ -37,11 +37,12 @@ defmodule Membrane.FLV.Muxer.Test do
     %{pid: pid}
   end
 
-  test "integration test", %{pid: pid} do
-    assert_end_of_stream(pid, :sink, :input)
+  @tag :tmp_dir
+  test "integration test", ctx do
+    assert_end_of_stream(ctx.pid, :sink, :input)
 
-    result = File.read!(@output) |> prepare()
-    reference = File.read!(@reference) |> prepare()
+    result = ctx.tmp_dir |> output() |> File.read!() |> prepare()
+    reference = @reference |> File.read!() |> prepare()
 
     assert result == reference
   end

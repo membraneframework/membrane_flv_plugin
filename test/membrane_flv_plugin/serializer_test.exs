@@ -1,5 +1,5 @@
 defmodule Membrane.FLV.Serializer.Test do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
 
   test "keeps the correct timestamp above 4 hours" do
     packet = %Membrane.FLV.Packet{

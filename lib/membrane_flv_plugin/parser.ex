@@ -28,15 +28,12 @@ defmodule Membrane.FLV.Parser do
   @spec parse_body(binary()) ::
           {:ok, packets :: [Packet.t()], rest :: binary()}
           | {:error, :not_enough_data}
-          | {:error, {:unsupported_codec, atom()}}
+          | {:error, {:unsupported_codec, FLV.video_codec_t()}}
   def parse_body(data) when byte_size(data) < 15, do: {:error, :not_enough_data}
 
   def parse_body(<<_head::40, data_size::24, _rest::binary>> = data)
       when byte_size(data) < data_size + 15,
       do: {:error, :not_enough_data}
-
-  def parse_body(<<_head::96, stream_id::24, _rest::binary>>) when stream_id != 0,
-    do: raise("Stream id has to be 0. Is `#{stream_id}`")
 
   # script data - ignoring it and continuing with following TAGs
   def parse_body(

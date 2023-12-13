@@ -4,19 +4,22 @@ defmodule Membrane.FLV.Demuxer do
   FLV format supports only one video and audio stream.
   They are optional however, FLV without either audio or video is also possible.
 
-  When a new FLV stream is detected, you will be notified with `Membrane.FLV.Demuxer.new_stream_notification()`.
+  When a new FLV stream is detected and an output pad for it has not been linked yet, the element will notify its parent
+  with `t:new_stream_notification_t/0` and start buffering the packets for the stream until the requested output pad is
+  linked. Please not that if the parent ignores the notification, the element will eventually raise an error as it can't
+  buffer the incoming packets indefinitely.
 
-  If you want to pre-link the pipeline and skip handling notifications, make sure use the following output pads:
+  If you want to pre-link the pipeline instead of linking dynamically on new stream notifications, you can use the
+  following output pads:
   - `Pad.ref(:audio, 0)` for audio stream
   - `Pad.ref(:video, 0)` for video stream
+  The `0` in the pad reference is the stream ID and it will be `0` for the majority of FLV streams.
 
   ## Note
   The demuxer implements the [Enhanced RTMP specification](https://github.com/veovera/enhanced-rtmp) in terms of parsing.
   It does NOT support processing of the protocols other than H264 and AAC.
-
   """
   use Membrane.Filter
-  use Bunch
 
   require Membrane.Logger
 
@@ -30,9 +33,16 @@ defmodule Membrane.FLV.Demuxer do
   @type new_stream_notification_t() :: {:new_stream, Membrane.Pad.ref(), codec_t()}
 
   @typedoc """
+  Notification that is sent when the demuxer encounters a video codec that is not supported by the element.
+  """
+  @type unsupported_codec_notification_t() ::
+          {:unsupported_codec, FLV.video_codec_t() | :AV1 | :HEVC | :VP9}
+
+  @typedoc """
   List of formats supported by the demuxer.
 
-  For video, only H264 is supported
+  For video, only H264 is supported. Other video codecs will result in `t:unsupported_codec_notification_t/0` and
+  dropping all the following packets.
   Audio codecs other than AAC might not work correctly, although they won't throw any errors.
   """
   @type codec_t() :: FLV.audio_codec_t() | :H264
@@ -41,9 +51,7 @@ defmodule Membrane.FLV.Demuxer do
     availability: :always,
     accepted_format:
       %RemoteStream{content_format: content_format, type: :bytestream}
-      when content_format in [nil, FLV],
-    flow_control: :manual,
-    demand_unit: :buffers
+      when content_format in [nil, FLV]
 
   def_output_pad :audio,
     availability: :on_request,
@@ -51,13 +59,11 @@ defmodule Membrane.FLV.Demuxer do
       any_of(
         RemoteStream,
         %AAC{encapsulation: :none, config: {:audio_specific_config, _config}}
-      ),
-    flow_control: :manual
+      )
 
   def_output_pad :video,
     availability: :on_request,
-    accepted_format: %H264{stream_structure: {:avc3, _dcr}},
-    flow_control: :manual
+    accepted_format: %H264{stream_structure: {:avc3, _dcr}}
 
   @impl true
   def handle_init(_ctx, _opts) do
@@ -66,19 +72,9 @@ defmodule Membrane.FLV.Demuxer do
        partial: <<>>,
        pads_buffer: %{},
        aac_asc: <<>>,
-       header_present?: true,
+       awaiting_header?: true,
        ignored_packets: 0
      }}
-  end
-
-  @impl true
-  def handle_playing(_ctx, state) do
-    {[demand: :input], state}
-  end
-
-  @impl true
-  def handle_demand(_pad, size, :buffers, _ctx, state) do
-    {[demand: {:input, size}], state}
   end
 
   @impl true
@@ -96,13 +92,15 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
-  def handle_buffer(:input, %Buffer{payload: payload}, _ctx, %{header_present?: true} = state) do
-    case Membrane.FLV.Parser.parse_header(state.partial <> payload) do
+  def handle_buffer(:input, buffer, _ctx, %{awaiting_header?: true} = state) do
+    header = state.partial <> buffer.payload
+
+    case Membrane.FLV.Parser.parse_header(header) do
       {:ok, _header, rest} ->
-        {[demand: :input], %{state | partial: rest, header_present?: false}}
+        {[], %{state | partial: rest, awaiting_header?: false}}
 
       {:error, :not_enough_data} ->
-        {[demand: :input], %{state | partial: state.partial <> payload}}
+        {[], %{state | partial: header}}
 
       {:error, :not_a_header} ->
         raise("Invalid data detected on the input. Expected FLV header")
@@ -110,15 +108,16 @@ defmodule Membrane.FLV.Demuxer do
   end
 
   @impl true
-  def handle_buffer(:input, %Buffer{payload: payload}, _ctx, %{header_present?: false} = state) do
-    case Parser.parse_body(state.partial <> payload) do
-      {:ok, frames, rest} ->
-        {actions, state} = get_actions(frames, state)
-        actions = Enum.concat(actions, demand: :input)
+  def handle_buffer(:input, buffer, _ctx, %{awaiting_header?: false} = state) do
+    body = state.partial <> buffer.payload
+
+    case Parser.parse_body(body) do
+      {:ok, packets, rest} ->
+        {actions, state} = get_actions(packets, state)
         {actions, %{state | partial: rest}}
 
       {:error, :not_enough_data} ->
-        {[demand: :input], %{state | partial: state.partial <> payload}}
+        {[], %{state | partial: body}}
 
       {:error, {:unsupported_codec, codec}} ->
         {[notify_parent: {:unsupported_codec, codec}],
@@ -128,49 +127,63 @@ defmodule Membrane.FLV.Demuxer do
 
   @impl true
   def handle_pad_added(pad, _ctx, state) do
-    actions = Map.get(state.pads_buffer, pad, []) |> Enum.to_list()
-    state = put_in(state, [:pads_buffer, pad], :connected)
-    {actions, state}
+    actions =
+      case Map.fetch(state.pads_buffer, pad) do
+        {:ok, buffer} ->
+          [{:stop_timer, {:link_timeout, pad}} | Enum.to_list(buffer)]
+
+        :error ->
+          []
+      end
+
+    {actions, put_in(state, [:pads_buffer, pad], :connected)}
+  end
+
+  @impl true
+  def handle_tick({:link_timeout, pad}, _ctx, _state) do
+    raise """
+    Exceeded the link timeout for pad #{inspect(pad)}.
+    Make sure to link the corresponding output pad on :new_stream notification.
+    """
   end
 
   @impl true
   def handle_end_of_stream(:input, _ctx, state) do
-    result =
-      state.pads_buffer
-      |> Enum.map(fn {pad, value} ->
-        if value == :connected do
-          {[end_of_stream: pad], {pad, value}}
-        else
-          {[], {pad, Qex.push(value, {:end_of_stream, pad})}}
-        end
-      end)
+    Enum.reduce(state.pads_buffer, {[], state}, fn {pad, value}, {actions, state} ->
+      action = {:end_of_stream, pad}
 
-    actions = Enum.flat_map(result, &elem(&1, 0))
-    pads_buffer = Enum.map(result, &elem(&1, 1)) |> Enum.into(%{})
-
-    {actions, %{state | pads_buffer: pads_buffer}}
+      if value == :connected do
+        {[action | actions], state}
+      else
+        {actions, put_in(state, [:pads_buffer, pad], Qex.push(value, action))}
+      end
+    end)
   end
 
-  defp get_actions(frames, original_state) do
-    Enum.reduce(frames, {[], original_state}, fn %{type: type} = packet, {actions, state} ->
-      pad = pad(packet)
+  defp get_actions(packets, state, actions \\ [])
 
-      pts = Membrane.Time.milliseconds(packet.pts)
-      dts = Membrane.Time.milliseconds(packet.dts)
+  defp get_actions([], state, actions), do: {actions, state}
 
-      cond do
-        type == :audio_config and packet.codec == :AAC ->
+  defp get_actions([packet | rest], state, actions) do
+    pad = pad(packet)
+
+    pts = Membrane.Time.milliseconds(packet.pts)
+    dts = Membrane.Time.milliseconds(packet.dts)
+
+    {new_actions, state} =
+      case packet do
+        %{type: :audio_config, codec: :AAC} ->
           Membrane.Logger.debug("Audio configuration received")
 
           {[stream_format: {pad, %AAC{config: {:audio_specific_config, packet.payload}}}], state}
 
-        type == :audio_config ->
+        %{type: :audio_config} ->
           {[
              stream_format: {pad, %RemoteStream{content_format: packet.codec}},
              buffer: {pad, %Buffer{pts: pts, dts: dts, payload: packet.payload}}
            ], state}
 
-        type == :video_config and packet.codec == :H264 ->
+        %{type: :video_config, codec: :H264} ->
           Membrane.Logger.debug("Video configuration received")
 
           {[
@@ -178,11 +191,11 @@ defmodule Membrane.FLV.Demuxer do
                {pad, %H264{alignment: :nalu, stream_structure: {:avc3, packet.payload}}}
            ], state}
 
-        type == :video_config and packet.codec in [:AV1, :HEVC, :VP9] ->
+        %{type: :video_config, codec: codec} when codec in [:AV1, :HEVC, :VP9] ->
           {[notify_parent: {:unsupported_codec, packet.codec}],
            %{state | ignored_packets: state.ignored_packets + 1}}
 
-        true ->
+        _other ->
           buffer = %Buffer{
             pts: pts,
             dts: dts,
@@ -192,37 +205,41 @@ defmodule Membrane.FLV.Demuxer do
 
           {[buffer: {pad, buffer}], state}
       end
-      |> buffer_or_send(packet)
-      |> then(fn {out_actions, state} -> {actions ++ out_actions, state} end)
-    end)
+
+    {out_actions, state} =
+      Enum.flat_map_reduce(new_actions, state, fn action, state ->
+        buffer_or_send(action, packet, state)
+      end)
+
+    get_actions(rest, state, actions ++ out_actions)
   end
 
-  defp buffer_or_send({actions, state}, packet) do
-    Enum.reduce(actions, {[], state}, fn action, {actions, state} ->
-      {out_actions, state} = buffer_or_send(action, packet, state)
-      {actions ++ out_actions, state}
-    end)
+  # actions that don't need an output pad shouldn't be buffered
+  defp buffer_or_send({:notify_parent, _notification} = action, _packet, state) do
+    {[action], state}
   end
 
-  defp buffer_or_send(action, packet, state) when not is_list(action) do
+  @link_timeout 5_000
+  defp buffer_or_send(action, packet, state) do
     pad = pad(packet)
 
-    cond do
-      match?(%{^pad => :connected}, state.pads_buffer) ->
-        {Bunch.listify(action), state}
+    case Map.fetch(state.pads_buffer, pad) do
+      {:ok, :connected} ->
+        {[action], state}
 
-      Map.has_key?(state.pads_buffer, pad) ->
-        state = update_in(state, [:pads_buffer, pad], &Qex.push(&1, action))
+      {:ok, buffer} ->
+        state = put_in(state, [:pads_buffer, pad], Qex.push(buffer, action))
+
         {[], state}
 
-      true ->
-        state = put_in(state, [:pads_buffer, pad(packet)], Qex.new([action]))
-        {notify_about_new_stream(packet), state}
-    end
-  end
+      :error ->
+        state = put_in(state, [:pads_buffer, pad], Qex.new([action]))
 
-  defp notify_about_new_stream(packet) do
-    [notify_parent: {:new_stream, pad(packet), packet.codec}]
+        {[
+           notify_parent: {:new_stream, pad, packet.codec},
+           start_timer: {{:link_timeout, pad}, Membrane.Time.milliseconds(@link_timeout)}
+         ], state}
+    end
   end
 
   defp get_metadata(%FLV.Packet{type: :video, codec_params: %{key_frame?: key_frame?}}),

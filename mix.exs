@@ -43,8 +43,6 @@ defmodule Membrane.FLV.Mixfile do
       {:membrane_file_plugin, "~> 0.16.0", only: :test},
       {:membrane_aac_plugin, "~> 0.18.0", only: :test},
       {:membrane_h264_plugin, "~> 0.9.0", only: :test},
-      {:bimap, "~> 1.2"},
-      {:bunch, "~> 1.3"},
       {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
       {:dialyxir, ">= 0.0.0", only: :dev, runtime: false},
       {:credo, ">= 0.0.0", only: :dev, runtime: false}

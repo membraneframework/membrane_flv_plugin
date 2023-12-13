@@ -139,6 +139,8 @@ defmodule Membrane.FLV.Demuxer do
     {actions, put_in(state, [:pads_buffer, pad], :connected)}
   end
 
+  # currently Membrane Core's callback typespec doesn't allow for functions that always raise
+  @dialyzer {:nowarn_function, handle_tick: 3}
   @impl true
   def handle_tick({:link_timeout, pad}, _ctx, _state) do
     raise """

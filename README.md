@@ -24,7 +24,7 @@ end
 For usage examples, have a look at `examples` directory.
 
 Available examples:
-- [`examples/demuxer.exs`](examples/demuxer.exs) - a demonstration of demuxing an FLV file. To run it, simply run `elixir examples/demuxer.exs`. It should generate `audio.aac` and `video.aac` extracted from the container. This example relies on an FLV file from this repository. If you cloned the repository, it should work without any modifications.
+- [`examples/demuxer.exs`](examples/demuxer.exs) - a demonstration of demuxing an FLV file. To run it, simply run `elixir examples/demuxer.exs`. It should generate `audio.aac` and `video.h264` extracted from the container. This example relies on an FLV file from this repository. If you cloned the repository, it should work without any modifications.
 - [`examples/muxer.exs`](examples/muxer.exs) - demonstration of muxing AAC and H264 to an FLV file. To run the example, run `elixir examples/muxer.exs`. It should generate `output.flv` file with the contents of both of the source files.
 
 ## Copyright and License

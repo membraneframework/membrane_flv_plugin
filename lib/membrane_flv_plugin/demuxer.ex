@@ -6,14 +6,14 @@ defmodule Membrane.FLV.Demuxer do
 
   When a new FLV stream is detected and an output pad for it has not been linked yet, the element will notify its parent
   with `t:new_stream_notification_t/0` and start buffering the packets for the stream until the requested output pad is
-  linked. Please not that if the parent ignores the notification, the element will eventually raise an error as it can't
+  linked. Please note that if the parent ignores the notification, the element will eventually raise an error as it can't
   buffer the incoming packets indefinitely.
 
   If you want to pre-link the pipeline instead of linking dynamically on new stream notifications, you can use the
   following output pads:
   - `Pad.ref(:audio, 0)` for audio stream
   - `Pad.ref(:video, 0)` for video stream
-  The `0` in the pad reference is the stream ID and it will be `0` for the majority of FLV streams.
+  The `0` in the pad reference is the stream ID and according to the FLV specification, it must always be 0.
 
   ## Note
   The demuxer implements the [Enhanced RTMP specification](https://github.com/veovera/enhanced-rtmp) in terms of parsing.
@@ -42,7 +42,7 @@ defmodule Membrane.FLV.Demuxer do
   List of formats supported by the demuxer.
 
   For video, only H264 is supported. Other video codecs will result in `t:unsupported_codec_notification_t/0` and
-  dropping all the following packets.
+  dropping all the following packets on all pads, expecting the parent to shut down.
   Audio codecs other than AAC might not work correctly, although they won't throw any errors.
   """
   @type codec_t() :: FLV.audio_codec_t() | :H264
@@ -152,12 +152,11 @@ defmodule Membrane.FLV.Demuxer do
   @impl true
   def handle_end_of_stream(:input, _ctx, state) do
     Enum.reduce(state.pads_buffer, {[], state}, fn {pad, value}, {actions, state} ->
-      action = {:end_of_stream, pad}
+      eos = {:end_of_stream, pad}
 
-      if value == :connected do
-        {[action | actions], state}
-      else
-        {actions, put_in(state, [:pads_buffer, pad], Qex.push(value, action))}
+      case value do
+        :connected -> {[eos | actions], state}
+        buffer -> {actions, put_in(state, [:pads_buffer, pad], Qex.push(buffer, eos))}
       end
     end)
   end
@@ -197,7 +196,7 @@ defmodule Membrane.FLV.Demuxer do
           {[notify_parent: {:unsupported_codec, packet.codec}],
            %{state | ignored_packets: state.ignored_packets + 1}}
 
-        _other ->
+        _media_packet ->
           buffer = %Buffer{
             pts: pts,
             dts: dts,

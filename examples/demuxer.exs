@@ -55,7 +55,7 @@ defmodule Example do
 end
 
 # Initialize the pipeline and start it
-{:ok, _supervisor_pid, pipeline_pid} = Example.start_link()
+{:ok, _supervisor_pid, pipeline_pid} = Membrane.Pipeline.start_link(Example)
 
 monitor_ref = Process.monitor(pipeline_pid)
 

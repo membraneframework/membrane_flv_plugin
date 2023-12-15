@@ -73,7 +73,7 @@ defmodule Membrane.FLV.Muxer do
   def handle_demand(:output, _size, :buffers, _ctx, state) do
     # We will request one buffer from the stream that has the lowest timestamp
     # This will ensure that the output stream has reasonable audio / video balance
-    {pad, _dts} = Enum.min_by(state.last_dts, &Bunch.value/1)
+    {pad, _dts} = Enum.min_by(state.last_dts, &elem(&1, 1))
     {[demand: {pad, 1}], state}
   end
 

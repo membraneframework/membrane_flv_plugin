@@ -12,34 +12,38 @@ defmodule Membrane.FLV.Muxer do
   use Membrane.Filter
 
   require Membrane.H264
-  alias Membrane.{AAC, Buffer, FLV, H264, RemoteStream}
+  alias Membrane.{AAC, Buffer, FLV, H264, RemoteStream, TimestampQueue}
   alias Membrane.FLV.{Header, Packet, Serializer}
 
   def_input_pad :audio,
     availability: :on_request,
-    accepted_format: %AAC{encapsulation: :none, config: {:audio_specific_config, _config}},
-    flow_control: :manual,
-    demand_unit: :buffers
+    accepted_format: %AAC{encapsulation: :none, config: {:audio_specific_config, _config}}
 
   def_input_pad :video,
     availability: :on_request,
-    accepted_format: %H264{stream_structure: structure} when H264.is_avc(structure),
-    flow_control: :manual,
-    demand_unit: :buffers
+    accepted_format: %H264{stream_structure: structure} when H264.is_avc(structure)
 
   def_output_pad :output,
     availability: :always,
-    accepted_format: %Membrane.RemoteStream{content_format: FLV},
-    flow_control: :manual
+    accepted_format: %Membrane.RemoteStream{content_format: FLV}
 
   @impl true
   def handle_init(_ctx, _opts) do
+    queue =
+      TimestampQueue.new(
+        pause_demand_boundary: Membrane.Time.milliseconds(100),
+        pause_demand_boundary_unit: :time,
+        synchronization_strategy: :explicit_offsets
+      )
+
     {[],
      %{
        previous_tag_size: 0,
        init_dts: %{},
        last_dts: %{},
-       header_sent: false
+       header_sent: false,
+       queue: queue,
+       pads_without_eos: MapSet.new()
      }}
   end
 
@@ -53,7 +57,11 @@ defmodule Membrane.FLV.Muxer do
 
   @impl true
   def handle_pad_added(Pad.ref(_type, 0) = pad, _ctx, state) do
-    state = put_in(state, [:last_dts, pad], 0)
+    state =
+      state
+      |> Map.update!(:queue, &TimestampQueue.register_pad(&1, pad))
+      |> Map.update!(:pads_without_eos, &MapSet.put(&1, pad))
+
     {[], state}
   end
 
@@ -69,16 +77,44 @@ defmodule Membrane.FLV.Muxer do
     {[stream_format: {:output, %RemoteStream{content_format: FLV}}] ++ actions, state}
   end
 
-  @impl true
-  def handle_demand(:output, _size, :buffers, _ctx, state) do
-    # We will request one buffer from the stream that has the lowest timestamp
-    # This will ensure that the output stream has reasonable audio / video balance
-    {pad, _dts} = Enum.min_by(state.last_dts, &elem(&1, 1))
-    {[demand: {pad, 1}], state}
-  end
+  # @impl true
+  # def handle_demand(:output, _size, :buffers, _ctx, state) do
+  #   # We will request one buffer from the stream that has the lowest timestamp
+  #   # This will ensure that the output stream has reasonable audio / video balance
+  #   {pad, _dts} = Enum.min_by(state.last_dts, &elem(&1, 1))
+  #   {[demand: {pad, 1}], state}
+  # end
 
   @impl true
-  def handle_buffer(Pad.ref(type, stream_id) = pad, buffer, _ctx, state) do
+  def handle_buffer(pad, buffer, _ctx, state) do
+    state.queue
+    |> TimestampQueue.push_buffer_and_pop_available_items(pad, buffer)
+    |> handle_queue_output(state)
+  end
+
+  def handle_stream_format(pad, format, _ctx, state) do
+    state.queue
+    |> TimestampQueue.push_stream_format(pad, format)
+    |> TimestampQueue.pop_available_items()
+    |> handle_queue_output(state)
+  end
+
+  def handle_end_of_stream(pad, _ctx, state) do
+    state.queue
+    |> TimestampQueue.push_end_of_stream(pad)
+    |> TimestampQueue.pop_available_items()
+    |> handle_queue_output(state)
+  end
+
+  defp handle_queue_output({suggested_actions, items, queue}, state) do
+    state = %{state | queue: queue}
+    {actions, state} = Enum.flat_map_reduce(items, state, &handle_queue_item/2)
+    {suggested_actions ++ actions, state}
+  end
+
+  defp handle_queue_item({pad, {:buffer, buffer}}, state) do
+    Pad.ref(type, stream_id) = pad
+
     dts = get_timestamp(buffer.dts || buffer.pts)
     pts = get_timestamp(buffer.pts) || dts
 
@@ -107,13 +143,11 @@ defmodule Membrane.FLV.Muxer do
     {actions ++ [redemand: :output], state}
   end
 
-  @impl true
-  def handle_stream_format(
-        Pad.ref(:audio, stream_id) = pad,
-        %AAC{config: {:audio_specific_config, config}},
-        _ctx,
-        state
-      ) do
+  defp handle_queue_item(
+         {Pad.ref(:audio, stream_id) = pad,
+          {:stream_format, %AAC{config: {:audio_specific_config, config}}}},
+         state
+       ) do
     timestamp = Map.get(state.last_dts, pad, 0) |> get_timestamp()
 
     %Packet{
@@ -127,13 +161,11 @@ defmodule Membrane.FLV.Muxer do
     |> prepare_to_send(state)
   end
 
-  @impl true
-  def handle_stream_format(
-        Pad.ref(:video, stream_id) = pad,
-        %H264{stream_structure: {:avc1, dcr}},
-        _ctx,
-        state
-      ) do
+  defp handle_queue_item(
+         {Pad.ref(:video, stream_id) = pad,
+          {:stream_format, %H264{stream_structure: {:avc1, dcr}}}},
+         state
+       ) do
     timestamp = Map.get(state.last_dts, pad, 0) |> get_timestamp()
 
     %Packet{
@@ -147,23 +179,20 @@ defmodule Membrane.FLV.Muxer do
     |> prepare_to_send(state)
   end
 
-  @impl true
-  def handle_stream_format(Pad.ref(type, _id) = _pad, stream_format, _ctx, _state),
-    do:
-      raise(
-        "Stream format '#{inspect(stream_format)}' is not supported for stream type #{inspect(type)}"
-      )
+  defp handle_queue_item({Pad.ref(type, _id), {:stream_format, stream_format}}, _state) do
+    raise """
+    Stream format '#{inspect(stream_format)}' is not supported for stream type #{inspect(type)}"
+    """
+  end
 
-  @impl true
-  def handle_end_of_stream(pad, ctx, state) do
-    # Check if there are any input pads that didn't eos. If not, send end of stream on output
-    state = Map.update!(state, :last_dts, &Map.delete(&1, pad))
+  defp handle_queue_item({pad, :end_of_stream}, state) do
+    state = Map.update!(state, :pads_without_eos, &MapSet.delete(&1, pad))
 
-    if Enum.any?(ctx.pads, &match?({_, %{direction: :input, end_of_stream?: false}}, &1)) do
-      {[redemand: :output], state}
-    else
+    if MapSet.size(state.pads_without_eos) == 0 do
       last = <<state.previous_tag_size::32>>
       {[buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output], state}
+    else
+      {[], state}
     end
   end
 

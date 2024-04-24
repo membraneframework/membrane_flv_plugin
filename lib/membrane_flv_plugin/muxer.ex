@@ -77,14 +77,6 @@ defmodule Membrane.FLV.Muxer do
     {[stream_format: {:output, %RemoteStream{content_format: FLV}}] ++ actions, state}
   end
 
-  # @impl true
-  # def handle_demand(:output, _size, :buffers, _ctx, state) do
-  #   # We will request one buffer from the stream that has the lowest timestamp
-  #   # This will ensure that the output stream has reasonable audio / video balance
-  #   {pad, _dts} = Enum.min_by(state.last_dts, &elem(&1, 1))
-  #   {[demand: {pad, 1}], state}
-  # end
-
   @impl true
   def handle_buffer(pad, buffer, _ctx, state) do
     state.queue
@@ -127,20 +119,17 @@ defmodule Membrane.FLV.Muxer do
 
     state = put_in(state, [:last_dts, pad], dts)
 
-    {actions, state} =
-      %Packet{
-        type: type,
-        stream_id: stream_id,
-        payload: buffer.payload,
-        codec: codec(type),
-        pts: pts,
-        dts: dts,
-        frame_type:
-          if(type == :audio or buffer.metadata.h264.key_frame?, do: :keyframe, else: :interframe)
-      }
-      |> prepare_to_send(state)
-
-    {actions ++ [redemand: :output], state}
+    %Packet{
+      type: type,
+      stream_id: stream_id,
+      payload: buffer.payload,
+      codec: codec(type),
+      pts: pts,
+      dts: dts,
+      frame_type:
+        if(type == :audio or buffer.metadata.h264.key_frame?, do: :keyframe, else: :interframe)
+    }
+    |> prepare_to_send(state)
   end
 
   defp handle_queue_item(

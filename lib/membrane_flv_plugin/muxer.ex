@@ -84,6 +84,7 @@ defmodule Membrane.FLV.Muxer do
     |> handle_queue_output(state)
   end
 
+  @impl true
   def handle_stream_format(pad, format, _ctx, state) do
     state.queue
     |> TimestampQueue.push_stream_format(pad, format)
@@ -91,6 +92,7 @@ defmodule Membrane.FLV.Muxer do
     |> handle_queue_output(state)
   end
 
+  @impl true
   def handle_end_of_stream(pad, _ctx, state) do
     state.queue
     |> TimestampQueue.push_end_of_stream(pad)

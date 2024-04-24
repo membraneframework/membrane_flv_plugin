@@ -43,7 +43,7 @@ defmodule Membrane.FLV.Muxer do
        last_dts: %{},
        header_sent: false,
        queue: queue,
-       pads_without_eos: MapSet.new()
+       inputs_without_eos: MapSet.new()
      }}
   end
 
@@ -60,7 +60,7 @@ defmodule Membrane.FLV.Muxer do
     state =
       state
       |> Map.update!(:queue, &TimestampQueue.register_pad(&1, pad))
-      |> Map.update!(:pads_without_eos, &MapSet.put(&1, pad))
+      |> Map.update!(:inputs_without_eos, &MapSet.put(&1, pad))
 
     {[], state}
   end
@@ -175,9 +175,9 @@ defmodule Membrane.FLV.Muxer do
   end
 
   defp handle_queue_item({pad, :end_of_stream}, state) do
-    state = Map.update!(state, :pads_without_eos, &MapSet.delete(&1, pad))
+    state = Map.update!(state, :inputs_without_eos, &MapSet.delete(&1, pad))
 
-    if MapSet.size(state.pads_without_eos) == 0 do
+    if MapSet.size(state.inputs_without_eos) == 0 do
       last = <<state.previous_tag_size::32>>
       {[buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output], state}
     else

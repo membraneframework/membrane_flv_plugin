@@ -45,6 +45,8 @@ defmodule Membrane.FLV.Muxer.Test do
     reference = @reference |> File.read!() |> prepare()
 
     assert result == reference
+
+    Pipeline.terminate(ctx.pid)
   end
 
   defp prepare(data) do

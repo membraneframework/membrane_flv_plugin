@@ -69,5 +69,7 @@ defmodule Membrane.FLV.Demuxer.Test do
 
     assert byte_size(audio) == 96_303
     assert byte_size(video) == 144_918
+
+    Pipeline.terminate(pid)
   end
 end

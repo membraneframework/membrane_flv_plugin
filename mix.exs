@@ -37,7 +37,7 @@ defmodule Membrane.FLV.Mixfile do
 
   defp deps do
     [
-      {:membrane_timestamp_queue, path: "../membrane_timestamp_queue"},
+      {:membrane_timestamp_queue, github: "membraneframework/membrane_timestamp_queue"},
       {:membrane_core, "~> 1.0"},
       {:membrane_aac_format, "~> 0.8.0"},
       {:membrane_h264_format, "~> 0.6.1"},

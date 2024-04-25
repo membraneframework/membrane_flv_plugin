@@ -78,6 +78,19 @@ defmodule Membrane.FLV.Muxer do
   end
 
   @impl true
+  def handle_event(:output, event, _ctx, state) do
+    {[forward: event], state}
+  end
+
+  @impl true
+  def handle_event(input_pad, event, _ctx, state) do
+    state
+    |> TimestampQueue.push_event(input_pad, event)
+    |> TimestampQueue.pop_available_items()
+    |> handle_queue_output(state)
+  end
+
+  @impl true
   def handle_buffer(pad, buffer, _ctx, state) do
     state.queue
     |> TimestampQueue.push_buffer_and_pop_available_items(pad, buffer)
@@ -104,6 +117,10 @@ defmodule Membrane.FLV.Muxer do
     state = %{state | queue: queue}
     {actions, state} = Enum.flat_map_reduce(items, state, &handle_queue_item/2)
     {suggested_actions ++ actions, state}
+  end
+
+  defp handle_queue_item({_input_pad, {:event, event}}, state) do
+    {[event: {:output, event}], state}
   end
 
   defp handle_queue_item({pad, {:buffer, buffer}}, state) do

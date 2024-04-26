@@ -84,7 +84,7 @@ defmodule Membrane.FLV.Muxer do
 
   @impl true
   def handle_event(input_pad, event, _ctx, state) do
-    state
+    state.queue
     |> TimestampQueue.push_event(input_pad, event)
     |> TimestampQueue.pop_available_items()
     |> handle_queue_output(state)

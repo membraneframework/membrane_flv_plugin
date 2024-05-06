@@ -110,7 +110,7 @@ defmodule Membrane.FLV.Muxer do
   defp handle_queue_output({suggested_actions, items, queue}, state) do
     state = %{state | queue: queue}
     {actions, state} = Enum.flat_map_reduce(items, state, &handle_queue_item/2)
-    {suggested_actions ++ actions, state}
+    {suggested_actions ++ actions ++ maybe_end_of_stream(state), state}
   end
 
   defp handle_queue_item({_input_pad, {:event, event}}, state) do
@@ -187,12 +187,14 @@ defmodule Membrane.FLV.Muxer do
     """
   end
 
-  defp handle_queue_item({_pad, :end_of_stream}, state) do
+  defp handle_queue_item({_pad, :end_of_stream}, state), do: {[], state}
+
+  defp maybe_end_of_stream(state) do
     if TimestampQueue.pads(state.queue) |> MapSet.size() == 0 do
       last = <<state.previous_tag_size::32>>
-      {[buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output], state}
+      [buffer: {:output, %Buffer{payload: last}}, end_of_stream: :output]
     else
-      {[], state}
+      []
     end
   end
 

@@ -1,7 +1,7 @@
 defmodule Membrane.FLV.Mixfile do
   use Mix.Project
 
-  @version "0.12.0"
+  @version "0.13.0"
   @github_url "https://github.com/membraneframework/membrane_flv_plugin"
 
   def project do
@@ -40,6 +40,7 @@ defmodule Membrane.FLV.Mixfile do
       {:membrane_core, "~> 1.0"},
       {:membrane_aac_format, "~> 0.8.0"},
       {:membrane_h264_format, "~> 0.6.1"},
+      {:membrane_timestamp_queue, "~> 0.2.1"},
       {:membrane_file_plugin, "~> 0.16.0", only: :test},
       {:membrane_aac_plugin, "~> 0.18.0", only: :test},
       {:membrane_h264_plugin, "~> 0.9.0", only: :test},

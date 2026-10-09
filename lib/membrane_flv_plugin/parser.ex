@@ -10,7 +10,7 @@ defmodule Membrane.FLV.Parser do
           _body::binary>> = data
       ) do
     case data do
-      <<_header::binary-size(data_offset), rest::binary>> ->
+      <<_header::binary-size(^data_offset), rest::binary>> ->
         %Header{
           audio_present?: type_flags_audio == 1,
           video_present?: type_flags_video == 1

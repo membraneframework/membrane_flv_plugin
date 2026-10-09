@@ -59,7 +59,7 @@ defmodule Membrane.FLV.Muxer.Test do
 
   defp get_items(<<_previous_tag_size::32, _head::8, data_size::24, _rest::binary>> = data) do
     packet_size = 11 + data_size
-    <<_previous_tag_size::32, packet::binary-size(packet_size), rest::binary>> = data
+    <<_previous_tag_size::32, packet::binary-size(^packet_size), rest::binary>> = data
     [packet | get_items(rest)]
   end
 
